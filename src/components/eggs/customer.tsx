@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { addDays, formatDay, formatWhen } from "@/lib/eggs/clock";
 import { ACCOUNT_LABEL, bi, EXCEPTION_LABEL, inr, ISSUE_KIND, PAY_LABEL, STATUS_LABEL, tx } from "@/lib/eggs/labels";
 import { packLabel, quoteCart } from "@/lib/eggs/pricing";
@@ -364,7 +365,7 @@ function Row({ k, v }: { k: string; v: string }) {
 export function OrdersBody() {
   const t = useT();
   const lang = useEggs((s) => s.lang);
-  const orders = useEggs((s) => s.orders.filter((o) => o.customerKey === "self"));
+  const orders = useEggs(useShallow((s) => s.orders.filter((o) => o.customerKey === "self")));
   const reorder = useEggs((s) => s.reorder);
   const products = useEggs((s) => s.products);
   return (
