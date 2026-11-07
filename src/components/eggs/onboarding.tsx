@@ -110,7 +110,7 @@ export function Onboarding() {
                 onChange={(e) => setCode(e.target.value.replace(/[^\d]/g, "").slice(0, 6))}
               />
               <p className="text-sm text-muted">
-                {t(bi(`Preview code ${OTP}. Production would send this by SMS.`, `முன்னோட்டக் குறியீடு ${OTP}. நேரடியாக SMS போகும்.`))}
+                {t(bi(`Demo only: use ${OTP}. This preview does not send SMS.`, `டெமோ மட்டும்: ${OTP} பயன்படுத்தவும். இந்த முன்னோட்டத்தில் SMS அனுப்பப்படாது.`))}
               </p>
             </>
           ) : null}
