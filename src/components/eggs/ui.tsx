@@ -130,8 +130,9 @@ export function NavLink({
     <Link
       to={to}
       className={cn(
-        "press inline-flex min-h-11 items-center justify-center gap-2 rounded-control px-3 text-sm",
-        active ? "bg-ink text-shell" : "text-muted",
+        "press inline-flex min-h-11 items-center justify-center rounded-control text-sm transition-colors",
+        icon ? "min-h-[58px] flex-col gap-1 px-1 py-2 text-[10px] font-medium leading-tight sm:text-[11px]" : "gap-2 px-3",
+        active ? "bg-ink text-shell" : "text-muted hover:bg-foam/70 hover:text-ink",
       )}
     >
       {icon}
