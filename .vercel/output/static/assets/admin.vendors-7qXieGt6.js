@@ -1,0 +1,1 @@
+import{o as e}from"./admin-C_6e2i48.js";var t=e;export{t as component};

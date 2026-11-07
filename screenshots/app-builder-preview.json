@@ -1,0 +1,36 @@
+{
+  "url": "http://127.0.0.1:8080/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "Eggsclusive — Chennai street eggs",
+      "hasCanvas": false,
+      "bodyTextLen": 258,
+      "bodyTextHash": "a93a9741971e6f0fe24b50bdda14e739f4677e86fa781462a292aa7a02288803",
+      "bodyTextPrefix": "Eggsclusive Sat 7 Nov · 11:12 IST Basket Customer Vendor Command",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "Eggsclusive — Chennai street eggs",
+      "hasCanvas": false,
+      "bodyTextLen": 236,
+      "bodyTextHash": "2709a8683e1aa0f0c3dfacc536c91a448a0a3055bfe8d5043852d256fa19cc65",
+      "bodyTextPrefix": "Eggsclusive Basket Customer Vendor Command தமிழ் Chennai · 01 / ",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-preview.json"
+}
