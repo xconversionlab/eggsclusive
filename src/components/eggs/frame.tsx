@@ -167,7 +167,7 @@ function PreviewNotice() {
     <div className="border-b border-line/80 bg-foam/65 px-3 py-2 text-center text-[11px] leading-4 text-muted sm:text-xs">
       <span className="font-semibold text-ink">{t(bi("Interactive product preview", "செயல்பாட்டு தயாரிப்பு முன்னோட்டம்"))}</span>
       <span className="mx-1.5 hidden text-muted/60 sm:inline">·</span>
-      {t(bi("Sample data on this device · no live SMS or payments", "இந்தச் சாதனத்தில் மாதிரி தரவு · நேரடி SMS அல்லது பணப்பரிவர்த்தனை இல்லை"))}
+      {t(bi("Demo data stays on this device · no live orders, SMS or payments", "டெமோ தரவு இந்தச் சாதனத்தில் மட்டும் · நேரடி ஆர்டர், SMS அல்லது பணப்பரிவர்த்தனை இல்லை"))}
     </div>
   );
 }
