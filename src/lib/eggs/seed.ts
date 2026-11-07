@@ -132,13 +132,13 @@ export const DEFAULT_PRICE: Record<string, number> = {
 };
 
 const PRODUCTS: Product[] = [
-  { id: "white", name: bi("White eggs", "வெள்ளை முட்டை"), blurb: bi("The everyday dozen from a partner farm.", "தினசரி வெள்ளை முட்டை. பங்காளிப் பண்ணை."), packs: [1, 6, 12, 15, 30, 210], active: true },
-  { id: "brown", name: bi("Brown eggs", "பழுப்பு முட்டை"), blurb: bi("Brown shell, same careful pack.", "பழுப்பு ஓடு. அதே கவனமான பொதி."), packs: [6, 12, 15, 30], active: true },
+  { id: "white", name: bi("White eggs", "வெள்ளை முட்டை"), blurb: bi("The everyday dozen from a partner farm.", "தினசரி வெள்ளை முட்டை. பங்காளிப் பண்ணை."), packs: [1, 6, 12, 15, 30, 180, 210, 360], active: true },
+  { id: "brown", name: bi("Brown eggs", "பழுப்பு முட்டை"), blurb: bi("Brown shell, same careful pack.", "பழுப்பு ஓடு. அதே கவனமான பொதி."), packs: [6, 12, 15, 30, 180], active: true },
   { id: "country", name: bi("Country eggs", "நாட்டுக்கோழி முட்டை"), blurb: bi("Naatu kozhi muttai. Smaller, deeper yolk.", "நாட்டுக்கோழி முட்டை. சிறியது, ஆழமான மஞ்சள்."), packs: [6, 12, 15, 30], active: true },
   { id: "quail", name: bi("Quail eggs", "காடை முட்டை"), blurb: bi("Speckled, sold by the half-dozen and up.", "புள்ளிகள். அரை டஜன் முதல்."), packs: [6, 12, 30], active: true },
-  { id: "duck", name: bi("Duck eggs", "வாத்து முட்டை"), blurb: bi("Larger eggs for baking and hotels.", "பேக்கிங் மற்றும் ஹோட்டலுக்கு பெரிய முட்டை."), packs: [1, 6, 12], active: true },
+  { id: "duck", name: bi("Duck eggs", "வாத்து முட்டை"), blurb: bi("Larger eggs for baking and hotels.", "பேக்கிங் மற்றும் ஹோட்டலுக்கு பெரிய முட்டை."), packs: [1, 6, 12, 30], active: true },
   { id: "freerange", name: bi("Free-range eggs", "திறந்தவெளி முட்டை"), blurb: bi("From open runs. Batch noted when the shop supplies it.", "திறந்தவெளி. கடை தந்தால் தொகுதி குறிப்பு."), packs: [6, 12, 30], active: true },
-  { id: "protein", name: bi("Protein-rich eggs", "புரத முட்டை"), blurb: bi("Marked protein lots for kitchens that ask.", "கேட்கும் சமையலறைகளுக்கு புரத இனம்."), packs: [6, 12, 15, 30, 210], active: true },
+  { id: "protein", name: bi("Protein-rich eggs", "புரத முட்டை"), blurb: bi("Marked protein lots for kitchens that ask.", "கேட்கும் சமையலறைகளுக்கு புரத இனம்."), packs: [6, 12, 15, 30, 180, 210], active: true },
 ];
 
 function vendor(

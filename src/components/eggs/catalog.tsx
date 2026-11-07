@@ -5,7 +5,7 @@ import { inr, tx } from "@/lib/eggs/labels";
 import { packLabel } from "@/lib/eggs/pricing";
 import { rankVendors, type RouteDecision } from "@/lib/eggs/routing";
 import { useEggs } from "@/lib/eggs/store";
-import type { Locality, Product, Street, Vendor, VendorProduct } from "@/lib/eggs/types";
+import type { Locality, Product, Street, VendorProduct } from "@/lib/eggs/types";
 import { Button, cn, EggMark, Panel } from "./ui";
 
 export function useShop() {

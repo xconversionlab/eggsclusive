@@ -278,7 +278,9 @@ function tokenIdentityKey(token: string): string {
             .digest("base64url");
         }
       }
-    } catch {}
+    } catch {
+      // Ignore malformed token and fall back to hash of raw token
+    }
   }
   return createHash("sha256").update(token).digest("base64url");
 }

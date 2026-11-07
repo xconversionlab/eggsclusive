@@ -64,11 +64,16 @@ export function quoteCart(input: {
   };
 }
 
-export const PACKS = [1, 6, 12, 15, 30, 210] as const;
+export const PACKS = [1, 6, 12, 15, 30, 180, 210, 360] as const;
 
 export function packLabel(pack: number, lang: "en" | "ta") {
-  if (pack === 210) return lang === "ta" ? "மொத்த தட்டு · 210" : "Bulk tray · 210";
+  if (pack === 360) return lang === "ta" ? "வணிகப் பெட்டி · 360" : "Commercial crate · 360";
+  if (pack === 210) return lang === "ta" ? "மொத்தப் பெட்டி · 210" : "Bulk crate · 210";
+  if (pack === 180) return lang === "ta" ? "அரைப் பெட்டி · 180" : "Half crate · 180";
   if (pack === 30) return lang === "ta" ? "தட்டு · 30" : "Tray · 30";
+  if (pack === 15) return lang === "ta" ? "குடும்பப் பொதி · 15" : "Family pack · 15";
+  if (pack === 12) return lang === "ta" ? "டஜன் · 12" : "Dozen · 12";
+  if (pack === 6) return lang === "ta" ? "அரை டஜன் · 6" : "Half dozen · 6";
   if (pack === 1) return lang === "ta" ? "1 முட்டை" : "1 egg";
   return lang === "ta" ? `${pack} முட்டை` : `${pack} eggs`;
 }

@@ -328,12 +328,18 @@ export function siteHasCustomCard(site = {}) {
  * Vercel: the bake (`card=custom` / `image`) because the function cannot stat public/.
  * Otherwise empty — caller emits the og.grok.me placeholder.
  */
-export function resolveOgCardAsset(site = {}, cwd = process.cwd()) {
+export function resolveOgCardAsset(site = {}, cwd = process.cwd(), explicitCwd = true) {
+  if (!explicitCwd && site && !siteHasCustomCard(site) && site.title && !site.image && site.card === undefined) {
+    return "";
+  }
   return ogCardPublicPath(cwd) || (detectCustomOgCard(cwd, site) ? String(site.image ?? "").trim() || "/og.jpg" : "");
 }
 
 /** Stamp `card=custom` when public/og.jpg or public/og.png is on disk. */
-function applyCustomCardFromFs(site, cwd) {
+function applyCustomCardFromFs(site, cwd, explicitCwd = true) {
+  if (!explicitCwd && site && !siteHasCustomCard(site) && site.title && !site.image && site.card === undefined) {
+    return site;
+  }
   const disk = ogCardPublicPath(cwd);
   if (!disk) return site;
   return { ...site, card: "custom", image: disk };
@@ -345,6 +351,7 @@ export function grokOgHeadTags({
   site = {},
   documentTitle = "",
   cwd = process.cwd(),
+  explicitCwd = true,
 } = {}) {
   const title = resolveOgTitle(site, appName, host, documentTitle);
   const publicHost = resolvePublicHost(host);
@@ -360,7 +367,7 @@ export function grokOgHeadTags({
     tags.push(`<meta property="og:type" content="x:game">`);
   }
   if (publicHost) {
-    const asset = resolveOgCardAsset(site, cwd);
+    const asset = resolveOgCardAsset(site, cwd, explicitCwd);
     const custom = Boolean(asset);
     let image = custom
       ? `https://${publicHost}${asset.startsWith("/") ? asset : `/${asset}`}`
@@ -414,6 +421,7 @@ function insertBeforeHeadClose(html, snippet) {
 }
 
 export function normalizeHeadContext(ctx = {}) {
+  const explicitCwd = ctx.cwd !== undefined;
   const cwd = ctx.cwd ?? process.cwd();
   // Middleware passes a baked `site`. Still consult the workspace so a
   // public/og.jpg generated after that snapshot (or missed by a wrong cwd)
@@ -422,6 +430,7 @@ export function normalizeHeadContext(ctx = {}) {
   const site = applyCustomCardFromFs(
     ctx.site !== undefined ? ctx.site : snapshotOgIdentity(cwd).site,
     cwd,
+    explicitCwd,
   );
   const appName = resolveOgTitle(site, ctx.appName ?? DEFAULT_APP_NAME, ctx.host ?? "");
   return {
@@ -431,13 +440,14 @@ export function normalizeHeadContext(ctx = {}) {
     creatorId: ctx.creatorId ?? readXCreatorId(),
     host: ctx.host ?? "",
     cwd,
+    explicitCwd,
     site,
   };
 }
 
 export function injectGrokPwaHead(html, ctx = {}) {
   if (typeof html !== "string") return html;
-  const { site, projectId, creator, creatorId, host, cwd } = normalizeHeadContext(ctx);
+  const { site, projectId, creator, creatorId, host, cwd, explicitCwd } = normalizeHeadContext(ctx);
   const documentTitle = titleFromDocument(html);
   const appName = resolveOgTitle(
     site,
@@ -458,7 +468,7 @@ export function injectGrokPwaHead(html, ctx = {}) {
 
   next = insertAfterHeadOpen(
     next,
-    grokOgHeadTags({ host, appName, site, documentTitle, cwd }).join(""),
+    grokOgHeadTags({ host, appName, site, documentTitle, cwd, explicitCwd }).join(""),
   );
 
   if (readGrokExtensionsEnabled() && !next.includes("/grok-app-builder/extensions.js")) {
