@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { Bar, BarChart, ResponsiveContainer, XAxis } from "recharts";
 import { formatDay } from "@/lib/eggs/clock";
 import { bi, inr, STATUS_LABEL, tx, VENDOR_STATUS } from "@/lib/eggs/labels";
@@ -47,7 +48,7 @@ function ShopPicker() {
 export function VendorHome() {
   const { t, lang } = useT();
   const vendor = useEggs((s) => s.vendors.find((v) => v.id === s.activeVendorId));
-  const orders = useEggs((s) => s.orders.filter((o) => o.vendorId === s.activeVendorId));
+  const orders = useEggs(useShallow((s) => s.orders.filter((o) => o.vendorId === s.activeVendorId)));
   const advance = useEggs((s) => s.vendorAdvance);
   const reject = useEggs((s) => s.vendorReject);
   const confirmCancel = useEggs((s) => s.confirmCancel);
@@ -175,7 +176,7 @@ function nextStatus(status: OrderStatus): OrderStatus | null {
 export function VendorStock() {
   const { t, lang } = useT();
   const vendorId = useEggs((s) => s.activeVendorId);
-  const rows = useEggs((s) => s.vendorProducts.filter((p) => p.vendorId === vendorId));
+  const rows = useEggs(useShallow((s) => s.vendorProducts.filter((p) => p.vendorId === vendorId)));
   const products = useEggs((s) => s.products);
   const setStock = useEggs((s) => s.vendorSetStock);
   const setPrice = useEggs((s) => s.vendorSetPrice);
@@ -220,7 +221,7 @@ export function VendorStock() {
 export function VendorStreets() {
   const { t } = useT();
   const vendor = useEggs((s) => s.vendors.find((v) => v.id === s.activeVendorId));
-  const assignments = useEggs((s) => s.assignments.filter((a) => a.vendorId === s.activeVendorId));
+  const assignments = useEggs(useShallow((s) => s.assignments.filter((a) => a.vendorId === s.activeVendorId)));
   const streets = useEggs((s) => s.streets);
   const localities = useEggs((s) => s.localities);
   const setHours = useEggs((s) => s.vendorSetHours);
@@ -281,9 +282,9 @@ export function VendorStreets() {
 export function VendorLedger() {
   const { t, lang } = useT();
   const vendor = useEggs((s) => s.vendors.find((v) => v.id === s.activeVendorId));
-  const orders = useEggs((s) => s.orders.filter((o) => o.vendorId === s.activeVendorId && o.status === "delivered"));
-  const settlements = useEggs((s) => s.settlements.filter((s) => s.vendorId === vendor?.id));
-  const offers = useEggs((s) => s.offers.filter((o) => o.vendorId === vendor?.id));
+  const orders = useEggs(useShallow((s) => s.orders.filter((o) => o.vendorId === s.activeVendorId && o.status === "delivered")));
+  const settlements = useEggs(useShallow((s) => s.settlements.filter((s) => s.vendorId === vendor?.id)));
+  const offers = useEggs(useShallow((s) => s.offers.filter((o) => o.vendorId === vendor?.id)));
   const toggle = useEggs((s) => s.vendorToggleOffer);
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
   if (!vendor) return null;
