@@ -27,3 +27,22 @@ create table if not exists "customer_wallet_transactions" (
 );
 create index if not exists "customer_wallet_transactions_customer_idx"
   on "customer_wallet_transactions" ("customer_user_id", "created_at" desc);
+
+create table if not exists "customer_addresses" (
+  "id" text primary key,
+  "customer_user_id" text not null references "user" ("id") on delete cascade,
+  "label" text not null default 'Home',
+  "city" text not null default 'Chennai',
+  "locality_id" text not null references "localities" ("id") on delete restrict,
+  "street_id" text not null references "streets" ("id") on delete restrict,
+  "address_line" text not null default '',
+  "door" text not null,
+  "apartment" text not null default '',
+  "landmark" text not null default '',
+  "pin" text not null,
+  "is_default" boolean not null default false,
+  "created_at" timestamptz not null default now(),
+  "updated_at" timestamptz not null default now()
+);
+create index if not exists "customer_addresses_user_idx"
+  on "customer_addresses" ("customer_user_id", "is_default");
