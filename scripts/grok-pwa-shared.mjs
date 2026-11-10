@@ -171,9 +171,9 @@ export function renderWebManifest(hostHeader) {
       theme_color: "#1c1915",
       icons: [
         {
-          src: "/eggsclusive-icon.svg",
+          src: "/spencers-mark.jpg",
           sizes: "any",
-          type: "image/svg+xml",
+          type: "image/jpeg",
           purpose: "any maskable",
         },
       ],
@@ -188,7 +188,7 @@ export function grokPwaHeadTags(appName = DEFAULT_APP_NAME) {
     // Standalone display comes from the manifest ("display": "standalone");
     // the legacy *-web-app-capable metas it replaces are deliberately absent.
     ["manifest", '<link rel="manifest" href="/__grok/manifest.webmanifest">'],
-    ["apple-touch-icon", '<link rel="apple-touch-icon" href="/__grok/icon-180.png">'],
+    ["apple-touch-icon", '<link rel="apple-touch-icon" href="/spencers-mark.jpg">'],
     [
       "apple-mobile-web-app-title",
       `<meta name="apple-mobile-web-app-title" content="${escapeHtml(appName)}">`,
@@ -197,7 +197,7 @@ export function grokPwaHeadTags(appName = DEFAULT_APP_NAME) {
       "apple-mobile-web-app-status-bar-style",
       '<meta name="apple-mobile-web-app-status-bar-style" content="black">',
     ],
-    ["theme-color", '<meta name="theme-color" content="#000000">'],
+    ["theme-color", '<meta name="theme-color" content="#07172e">'],
   ];
 }
 
@@ -462,7 +462,7 @@ export function injectGrokPwaHead(html, ctx = {}) {
   const missing = grokPwaHeadTags(appName)
     .filter(([key]) => {
       if (key === "manifest") return !next.includes('href="/__grok/manifest.webmanifest"');
-      if (key === "apple-touch-icon") return !next.includes('href="/__grok/icon-180.png"');
+      if (key === "apple-touch-icon") return !next.includes('href="/spencers-mark.jpg"');
       return !next.includes(`name="${key}"`);
     })
     .map(([, tag]) => tag);
