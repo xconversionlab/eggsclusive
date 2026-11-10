@@ -349,7 +349,7 @@ export function CartBody() {
               <div className="rounded-xl border border-dashed border-[#b8d8f2] bg-white p-4 text-center">
                 <p className="text-[10px] font-bold uppercase tracking-[.16em] text-muted">{t(bi("Amount to simulate", "டெமோ தொகை"))}</p>
                 <p className="mt-1 text-3xl font-extrabold tabular-nums">{inr(due, shop.lang)}</p>
-                <p className="mt-2 text-xs text-muted">eggsclusive@okaxis</p>
+                <p className="mt-2 text-xs text-muted">spencers.demo@okaxis</p>
               </div>
               <p className="text-xs leading-5 text-muted">{t(bi("No UPI app opens and no money moves. Confirm below to simulate a successful payment for this demo order.", "UPI செயலி திறக்கப்படாது; பணம் பரிமாறப்படாது. டெமோ ஆர்டருக்கான வெற்றிகரமான கட்டணத்தை உருவகப்படுத்த கீழே உறுதி செய்யுங்கள்."))}</p>
               <Button className="w-full" data-testid="place-order" disabled={!mine?.eligible || cart.length === 0 || placing} onClick={() => {
