@@ -53,42 +53,51 @@ export function priceOf(rows: VendorProduct[], vendorId: string | null, productI
 
 export function ProductCard({ product }: { product: Product }) {
   const { vendorId, vendorProducts, lang } = useShop();
-  const fav = useEggs((s) => s.favourites.includes(product.id));
-  const toggle = useEggs((s) => s.toggleFav);
-  const t = (text: { en: string; ta: string }) => tx(lang, text);
   const row = priceOf(vendorProducts, vendorId, product.id);
+  const quantity = useEggs((state) => state.cart.find((line) => line.productId === product.id && line.pack === 1)?.qtyPacks ?? 0);
+  const add = useEggs((state) => state.addToCart);
+  const setQty = useEggs((state) => state.setLineQty);
+  const t = (text: { en: string; ta: string }) => tx(lang, text);
+  const available = row?.stockEggs ?? 0;
   return (
-    <article className="flex gap-3 rounded-card border border-line bg-shell p-3">
-      <EggMark id={product.id} />
-      <div className="min-w-0 flex-1">
-        <div className="flex items-start justify-between gap-2">
-          <h3 className="font-medium">{t(product.name)}</h3>
-          <button className="min-h-11 px-2 text-sm text-muted" onClick={() => toggle(product.id)} aria-pressed={fav}>
-            {fav ? t({ en: "Saved", ta: "சேமிப்பு" }) : t({ en: "Save", ta: "சேமி" })}
-          </button>
+    <article className="group relative overflow-hidden rounded-[1.65rem] border border-line bg-white p-4 shadow-[0_12px_38px_rgba(7,23,46,.055)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_18px_46px_rgba(7,23,46,.1)] sm:p-5">
+      <div className="pointer-events-none absolute -right-10 -top-12 h-40 w-40 rounded-full bg-[#eaf4ff] blur-2xl transition-transform duration-700 group-hover:scale-125" />
+      <div className="relative flex items-center gap-4">
+        <div className="float-gentle">
+          <EggMark id="egg" />
         </div>
-        <p className="text-sm text-muted">{t(product.blurb)}</p>
-        {row ? (
-          <p className="mt-2 text-sm tabular-nums">
-            {inr(row.pricePerEggPaise, lang)}
-            <span className="text-muted"> {t({ en: " / egg", ta: " / முட்டை" })}</span>
-            <span className="text-muted"> · {row.stockEggs} {t({ en: "in stock", ta: "இருப்பில்" })}</span>
-          </p>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            <p className="text-[9px] font-extrabold uppercase tracking-[.2em] text-emerald-700">{t({ en: "Fresh daily", ta: "தினசரி புதியது" })}</p>
+          </div>
+          <h3 className="mt-1 text-lg font-extrabold tracking-tight text-ink">{t(product.name)}</h3>
+          <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted">{t(product.blurb)}</p>
+          {row ? (
+            <p className="mt-2 text-sm font-bold tabular-nums text-ink">
+              {inr(row.pricePerEggPaise, lang)} <span className="text-[10px] font-medium text-muted">/ {t({ en: "egg", ta: "முட்டை" })}</span>
+            </p>
+          ) : (
+            <p className="mt-2 text-xs font-semibold text-muted">{t({ en: "Not available on this delivery route", ta: "இந்த விநியோக வழியில் கிடைக்கவில்லை" })}</p>
+          )}
+        </div>
+      </div>
+      <div className="relative mt-4 flex items-center justify-between gap-3 border-t border-line pt-3">
+        <div>
+          <p className="text-[10px] font-semibold text-muted">{available > 0 ? t({ en: "Available now", ta: "இப்போது கிடைக்கும்" }) : t({ en: "Currently unavailable", ta: "தற்போது கிடைக்கவில்லை" })}</p>
+          <p className="mt-0.5 text-xs font-bold tabular-nums text-ink">{available > 0 ? t({ en: `${available} eggs`, ta: `${available} முட்டைகள்` }) : "—"}</p>
+        </div>
+        {quantity > 0 ? (
+          <div className="flex items-center gap-3 rounded-full border border-[#c9e4fb] bg-[#eef7ff] p-1">
+            <button type="button" className="quantity-button grid h-9 w-9 place-items-center rounded-full bg-white text-ink" aria-label={t({ en: "Reduce quantity", ta: "எண்ணிக்கையை குறை" })} onClick={() => setQty(product.id, 1, quantity - 1)}>−</button>
+            <span className="min-w-5 text-center text-sm font-extrabold tabular-nums text-ink">{quantity}</span>
+            <button type="button" className="quantity-button grid h-9 w-9 place-items-center rounded-full bg-mark text-white" aria-label={t({ en: "Add one egg", ta: "ஒரு முட்டை சேர்" })} disabled={quantity >= available} onClick={() => add(product.id, 1)}>+</button>
+          </div>
         ) : (
-          <p className="mt-2 text-sm text-muted">{t({ en: "Not carried on this street’s shop.", ta: "இந்தத் தெருக் கடையில் இல்லை." })}</p>
+          <button type="button" className="press blue-glow inline-flex min-h-10 items-center gap-3 rounded-full bg-ink px-5 text-xs font-extrabold uppercase tracking-[.13em] text-white disabled:opacity-40" disabled={!row || available < 1} onClick={() => add(product.id, 1)}>
+            {t({ en: "Add", ta: "சேர்" })}<span className="text-base leading-none text-[#69c2ff]">+</span>
+          </button>
         )}
-        <div className="mt-2 flex flex-wrap gap-2">
-          {product.packs.slice(0, 4).map((pack) => (
-            <Link
-              key={pack}
-              to="/product/$sku"
-              params={{ sku: product.id }}
-              className="press inline-flex min-h-11 items-center rounded-control border border-line px-3 text-sm"
-            >
-              {packLabel(pack, lang)}
-            </Link>
-          ))}
-        </div>
       </div>
     </article>
   );
