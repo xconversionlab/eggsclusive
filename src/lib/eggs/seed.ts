@@ -122,23 +122,17 @@ const STREETS: Street[] = [
 ];
 
 export const DEFAULT_PRICE: Record<string, number> = {
-  white: 700,
-  brown: 900,
-  country: 1400,
-  quail: 500,
-  duck: 1800,
-  freerange: 1600,
-  protein: 1200,
+  egg: 700,
 };
 
 const PRODUCTS: Product[] = [
-  { id: "white", name: bi("White eggs", "வெள்ளை முட்டை"), blurb: bi("The everyday dozen from a partner farm.", "தினசரி வெள்ளை முட்டை. பங்காளிப் பண்ணை."), packs: [1, 6, 12, 15, 30, 180, 210, 360], active: true },
-  { id: "brown", name: bi("Brown eggs", "பழுப்பு முட்டை"), blurb: bi("Brown shell, same careful pack.", "பழுப்பு ஓடு. அதே கவனமான பொதி."), packs: [6, 12, 15, 30, 180], active: true },
-  { id: "country", name: bi("Country eggs", "நாட்டுக்கோழி முட்டை"), blurb: bi("Naatu kozhi muttai. Smaller, deeper yolk.", "நாட்டுக்கோழி முட்டை. சிறியது, ஆழமான மஞ்சள்."), packs: [6, 12, 15, 30], active: true },
-  { id: "quail", name: bi("Quail eggs", "காடை முட்டை"), blurb: bi("Speckled, sold by the half-dozen and up.", "புள்ளிகள். அரை டஜன் முதல்."), packs: [6, 12, 30], active: true },
-  { id: "duck", name: bi("Duck eggs", "வாத்து முட்டை"), blurb: bi("Larger eggs for baking and hotels.", "பேக்கிங் மற்றும் ஹோட்டலுக்கு பெரிய முட்டை."), packs: [1, 6, 12, 30], active: true },
-  { id: "freerange", name: bi("Free-range eggs", "திறந்தவெளி முட்டை"), blurb: bi("From open runs. Batch noted when the shop supplies it.", "திறந்தவெளி. கடை தந்தால் தொகுதி குறிப்பு."), packs: [6, 12, 30], active: true },
-  { id: "protein", name: bi("Protein-rich eggs", "புரத முட்டை"), blurb: bi("Marked protein lots for kitchens that ask.", "கேட்கும் சமையலறைகளுக்கு புரத இனம்."), packs: [6, 12, 15, 30, 180, 210], active: true },
+  {
+    id: "egg",
+    name: bi("Farm Fresh Egg", "பண்ணை புதிய முட்டை"),
+    blurb: bi("One carefully handled, everyday egg. Choose your quantity and we’ll bring it to your door.", "கவனமாக கையாளப்பட்ட தினசரி முட்டை. எண்ணிக்கையைத் தேர்வு செய்யுங்கள்; உங்கள் வாசலுக்கு கொண்டு வருகிறோம்."),
+    packs: [1],
+    active: true,
+  },
 ];
 
 function vendor(
@@ -175,6 +169,7 @@ function vendor(
     acceptingOrders: accepting,
     rider: bi(riderEn, riderTa),
     pin,
+    deliveryRadiusKm: 5,
   };
 }
 
@@ -223,29 +218,12 @@ function stockRow(
 }
 
 const VROWS: VendorProduct[] = [
-  stockRow("v-murugan", "white", 700, 420, 40, { en: "Laid yesterday · Sriperumbudur partner farm", ta: "நேற்று இட்டது · ஸ்ரீபெரும்புதூர் பண்ணை" }),
-  stockRow("v-murugan", "brown", 900, 160, 30),
-  stockRow("v-murugan", "country", 1400, 90, 24, { en: "This morning · Chengalpattu collective", ta: "இன்று காலை · செங்கல்பட்டு குழு" }),
-  stockRow("v-murugan", "quail", 500, 70, 20),
-  stockRow("v-murugan", "duck", 1800, 24, 12),
-  stockRow("v-murugan", "freerange", 1600, 48, 18),
-  stockRow("v-murugan", "protein", 1200, 110, 24),
-  stockRow("v-lakshmi", "country", 1500, 280, 40, { en: "This morning · backyard collective", ta: "இன்று காலை · வீட்டுப் பண்ணை" }),
-  stockRow("v-lakshmi", "white", 750, 40, 20),
-  stockRow("v-lakshmi", "brown", 950, 36, 16),
-  stockRow("v-lakshmi", "freerange", 1700, 60, 20),
-  stockRow("v-anna", "white", 650, 640, 80),
-  stockRow("v-anna", "brown", 850, 200, 40),
-  stockRow("v-anna", "protein", 1100, 260, 40),
-  stockRow("v-anna", "country", 1350, 70, 20),
-  stockRow("v-sun", "white", 720, 180, 40),
-  stockRow("v-sun", "brown", 920, 8, 20),
-  stockRow("v-sun", "duck", 1700, 40, 10),
-  stockRow("v-sun", "quail", 480, 90, 24),
-  stockRow("v-sun", "country", 1450, 30, 12),
-  stockRow("v-pondy", "white", 680, 0, 40),
-  stockRow("v-pondy", "protein", 1150, 0, 20),
-  stockRow("v-old", "white", 700, 20, 10),
+  stockRow("v-murugan", "egg", 700, 420, 40),
+  stockRow("v-lakshmi", "egg", 720, 280, 40),
+  stockRow("v-anna", "egg", 680, 640, 80),
+  stockRow("v-sun", "egg", 740, 180, 40),
+  stockRow("v-pondy", "egg", 700, 0, 40),
+  stockRow("v-old", "egg", 700, 20, 10),
 ];
 
 const SLOTS: Slot[] = [
@@ -527,28 +505,10 @@ export function createCatalogue(): Catalogue {
       { code: "DAWN15", kind: "flat", value: 1500, rule: "early", label: bi("₹15 off dawn and morning slots", "அதிகாலை மற்றும் காலைக்கு ₹15"), active: true },
       { code: "TRAY30", kind: "flat", value: 3000, rule: "tray", label: bi("₹30 off a tray of 30 or more", "30 அல்லது அதற்கு மேல் தட்டுக்கு ₹30"), active: true },
     ],
-    offers: [
-      { id: "off-1", vendorId: "v-murugan", title: bi("Dawn country tray", "அதிகாலை நாட்டுத் தட்டு"), detail: bi("Ask for the morning batch before 7.", "7 மணிக்குள் காலைத் தொகுதியைக் கேளுங்கள்."), active: true },
-      { id: "off-2", vendorId: "v-lakshmi", title: bi("Hotel tray standing order", "ஹோட்டல் நிலை ஆர்டர்"), detail: bi("Country eggs, same door, every dawn.", "நாட்டு முட்டை, அதே வாசல், ஒவ்வொரு அதிகாலையும்."), active: true },
-    ],
-    orders,
-    subscriptions: [
-      {
-        id: "sub-14",
-        productId: "country",
-        pack: 12,
-        qtyPacks: 1,
-        cadence: "daily",
-        slotId: "dawn",
-        status: "active",
-        skipDates: [],
-        vendorId: "v-murugan",
-        address: addr("besant", "besant-4", "18", "Ground", "Blue gate, near the park"),
-        nextDate: tomorrow,
-        pricePerEggPaise: 1400,
-      },
-    ],
-    complaints,
+    offers: [],
+    orders: [],
+    subscriptions: [],
+    complaints: [],
     audits: [
       { id: nid("aud"), at: now, actor: "Command", action: "street.pause", detail: "ECR Service Lane paused after a washout." },
       { id: nid("aud"), at: now, actor: "Command", action: "vendor.pending", detail: "Pondy Bazaar Bulk is waiting for approval." },
@@ -557,24 +517,21 @@ export function createCatalogue(): Catalogue {
       { id: "set-88", vendorId: "v-murugan", label: "27 Oct – 2 Nov", grossPaise: 186400, commissionPaise: 14912, netPaise: 171488, status: "paid", at: now },
       { id: "set-74", vendorId: "v-lakshmi", label: "27 Oct – 2 Nov", grossPaise: 142000, commissionPaise: 11360, netPaise: 130640, status: "paid", at: now },
     ],
-    notices: [
-      { id: "nt-1", at: now, title: bi("Dawn is full on 7th Cross", "7ஆம் கிராஸில் அதிகாலை நிரம்பியது"), body: bi("Murugan’s dawn slot is at capacity today. Late morning is still open.", "முருகனின் அதிகாலை நேரம் இன்று நிரம்பியது. காலை தாமதம் திறந்துள்ளது."), read: false },
-      { id: "nt-2", at: now, title: bi("Yesterday’s country dozen", "நேற்றைய நாட்டு டஜன்"), body: bi("Delivered to 18, 4th Cross. You can report a crack from the order.", "4ஆம் கிராஸ், 18-க்கு வழங்கப்பட்டது. உடைந்ததை ஆர்டரில் தெரிவிக்கலாம்."), read: false },
-    ],
+    notices: [],
     streetRequests: [
       { id: "req-2", query: "Indira Nagar 12th Cross", localityId: "adyar", at: now, status: "open" },
     ],
     campaign: {
-      active: true,
-      title: bi("Laid this morning", "இன்று காலை இட்டது"),
-      body: bi("Country eggs on Besant, Mylapore and Adyar streets. Batch is on the product.", "பெசன்ட், மயிலாப்பூர், அடையாறு தெருக்களில் நாட்டு முட்டை. தொகுதி பொருளில் உள்ளது."),
+      active: false,
+      title: bi("Freshness, delivered.", "புத்துணர்ச்சி உங்கள் வாசலில்."),
+      body: bi("Simple, fresh eggs delivered within your local service area.", "உங்கள் உள்ளூர் சேவை எல்லைக்குள் புதிய முட்டைகள்."),
     },
     roles: [
       { id: "ops", streets: true, vendors: true, reassign: true, refunds: false, settle: false, broadcast: true },
       { id: "support", streets: false, vendors: false, reassign: false, refunds: true, settle: false, broadcast: false },
       { id: "finance", streets: false, vendors: false, reassign: false, refunds: true, settle: true, broadcast: false },
     ],
-    config: { cityActive: true, codEnabled: true, upiEnabled: true, walletEnabled: true, tradeBps: 500, earlyOpen: "05:30" },
+    config: { cityActive: true, codEnabled: true, upiEnabled: false, walletEnabled: true, tradeBps: 0, earlyOpen: "05:30" },
   };
 }
 
