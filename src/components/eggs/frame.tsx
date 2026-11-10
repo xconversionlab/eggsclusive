@@ -21,7 +21,7 @@ function Splash() {
   return (
     <main className="grid min-h-screen place-items-center bg-paper px-6 text-ink">
       <div className="flex flex-col items-center text-center app-enter">
-        <img src="/spencers-mark.webp" alt="" className="h-24 w-24 rounded-[1.8rem] object-cover shadow-xl float-gentle" />
+        <img src="/spencers-mark.webp" alt="" className="brand-mark brand-mark-large h-24 w-24 rounded-[1.8rem] object-cover shadow-xl" />
         <p className="mt-5 text-[11px] font-extrabold uppercase tracking-[.32em] text-mark">Spencers Enterprices</p>
         <h1 className="mt-2 text-xl font-bold tracking-tight">Fresh eggs. Delivered.</h1>
         <p className="mt-2 text-sm text-muted">Chennai · Customer app preview</p>
@@ -32,6 +32,14 @@ function Splash() {
 
 export function Frame({ children }: { children: ReactNode }) {
   const ready = useHydrated();
+  const path = useRouterState({ select: (s) => s.location.pathname });
+  const [transitioning, setTransitioning] = useState(false);
+  useEffect(() => {
+    if (!ready) return;
+    setTransitioning(true);
+    const timer = window.setTimeout(() => setTransitioning(false), 560);
+    return () => window.clearTimeout(timer);
+  }, [path, ready]);
   const lang = useEggs((s) => s.lang);
   useEffect(() => {
     if (ready) document.documentElement.lang = lang === "ta" ? "ta" : "en";
@@ -40,6 +48,7 @@ export function Frame({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-paper text-ink">
       <TopBar />
+      {transitioning ? <div className="route-transition" aria-label="Loading page" role="status"><img src="/spencers-mark.webp" alt="" /><span>SPENCERS</span></div> : null}
       <PreviewNotice />
       <FlashBar />
       <Shell>{children}</Shell>
