@@ -18,14 +18,14 @@ export const Route = createRootRoute({
       { name: "theme-color", content: "#07172e" },
     ],
     links: [
-      { rel: "icon", type: "image/jpeg", href: "/spencers-mark.jpg" },
+      { rel: "icon", type: "image/webp", href: "/spencers-mark.webp" },
       { rel: "stylesheet", href: appCss },
       {
         rel: "stylesheet",
         href: "https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Noto+Sans+Tamil:wght@400;500;600;700&display=swap",
       },
       { rel: "manifest", href: "/__grok/manifest.webmanifest" },
-      { rel: "apple-touch-icon", href: "/spencers-mark.jpg" },
+      { rel: "apple-touch-icon", href: "/spencers-mark.webp" },
     ],
   }),
   component: () => (
