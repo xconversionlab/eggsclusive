@@ -19,6 +19,7 @@ import type {
   RolePerm,
   SupportNote,
   Vendor,
+  WalletEntry,
 } from "./types";
 
 export type Session = {
@@ -30,6 +31,8 @@ export type Session = {
   cartVendorId: string | null;
   couponCode: string | null;
   walletPaise: number;
+  walletBalances: Record<string, number>;
+  walletEntries: WalletEntry[];
   favourites: string[];
   activeVendorId: string;
   actingRole: ActingRole;
@@ -99,24 +102,58 @@ export type EggsState = Catalogue &
 function session(): Session {
   return {
     lang: "en",
-    profile: { name: "Meenakshi R.", phone: "", phoneVerified: false, accountType: "home", businessName: "" },
+    profile: { name: "", phone: "", phoneVerified: false, accountType: "home", businessName: "" },
     address: null,
     editingStreet: false,
     cart: [],
     cartVendorId: null,
     couponCode: null,
-    walletPaise: 12000,
-    favourites: ["country"],
+    walletPaise: 0,
+    walletBalances: {},
+    walletEntries: [],
+    favourites: ["egg"],
     activeVendorId: "v-murugan",
     actingRole: "owner",
     support: [
       {
         from: "desk",
-        text: "Eggsclusive desk · Chennai. Write in English or Tamil. Broken eggs are handled from the order, not here.",
+        text: "Spencers Enterprices customer care · Chennai. Write in English or Tamil. We are here to help with your order.",
         at: new Date().toISOString(),
       },
     ],
     flash: null,
+  };
+}
+
+function phoneWalletKey(phone: string) {
+  return phone.replace(/\D/g, "").slice(-10);
+}
+
+function walletPatch(
+  state: Pick<EggsState, "profile" | "walletBalances" | "walletEntries">,
+  nextBalance: number,
+  entry?: { direction: "credit" | "debit"; reason: string; amountPaise: number; reference?: string },
+): Pick<EggsState, "walletPaise" | "walletBalances" | "walletEntries"> {
+  const key = phoneWalletKey(state.profile.phone);
+  if (!key || key.length !== 10) {
+    return { walletPaise: nextBalance, walletBalances: state.walletBalances, walletEntries: state.walletEntries };
+  }
+  const walletEntries: WalletEntry[] = entry && entry.amountPaise > 0
+    ? [{
+        id: nid("wal"),
+        phone: key,
+        direction: entry.direction,
+        reason: entry.reason,
+        amountPaise: entry.amountPaise,
+        balanceAfterPaise: nextBalance,
+        at: new Date().toISOString(),
+        reference: entry.reference,
+      }, ...state.walletEntries]
+    : state.walletEntries;
+  return {
+    walletPaise: nextBalance,
+    walletBalances: { ...state.walletBalances, [key]: nextBalance },
+    walletEntries,
   };
 }
 
@@ -165,11 +202,15 @@ export const useEggs = create<EggsState>()(
       ...session(),
       setLang: (lang) => set({ lang }),
       clearFlash: () => set({ flash: null }),
-      verifyPhone: (phone, name) =>
+      verifyPhone: (phone, name) => {
+        const s = get();
+        const key = phoneWalletKey(phone);
         set({
-          profile: { ...get().profile, phone, name: name.trim() || get().profile.name, phoneVerified: true },
+          profile: { ...s.profile, phone, name: name.trim() || "Customer", phoneVerified: true },
+          walletPaise: s.walletBalances[key] ?? 0,
           flash: say(bi("Number confirmed.", "எண் உறுதி.")),
-        }),
+        });
+      },
       setAccount: (accountType, businessName, name) =>
         set({ profile: { ...get().profile, accountType, businessName, name: name.trim() || get().profile.name } }),
       confirmAddress: (address) => {
@@ -352,7 +393,7 @@ export const useEggs = create<EggsState>()(
             return eggs ? { ...row, stockEggs: row.stockEggs - eggs } : row;
           }),
           capacities: takeSeat(s.capacities, s.cartVendorId, slotId, date),
-          walletPaise: s.walletPaise - walletOff,
+          ...walletPatch(s, s.walletPaise - walletOff, walletOff > 0 ? { direction: "debit", reason: `Order ${id}`, amountPaise: walletOff, reference: id } : undefined),
           cart: [],
           couponCode: null,
           notices: [
@@ -383,7 +424,7 @@ export const useEggs = create<EggsState>()(
             ),
             vendorProducts: restoreStock(s, order),
             capacities: releaseSeat(s.capacities, order),
-            walletPaise: s.walletPaise + refund,
+            ...walletPatch(s, s.walletPaise + refund, refund > 0 ? { direction: "credit", reason: `Refund ${orderId}`, amountPaise: refund, reference: orderId } : undefined),
             flash: say(refund ? bi("Cancelled. Captured money is back in the wallet.", "ரத்து. பிடித்த பணம் பணப்பையில்.") : bi("Cancelled.", "ரத்து செய்யப்பட்டது.")),
           });
           return;
@@ -408,7 +449,7 @@ export const useEggs = create<EggsState>()(
           ),
           vendorProducts: restoreStock(s, order),
           capacities: releaseSeat(s.capacities, order),
-          walletPaise: s.walletPaise + refund,
+          ...walletPatch(s, s.walletPaise + refund, refund > 0 ? { direction: "credit", reason: `Refund ${orderId}`, amountPaise: refund, reference: orderId } : undefined),
           audits: [audit("Vendor", "order.cancel", `${orderId} cancelled by the shop.`), ...s.audits],
         });
       },
@@ -458,7 +499,7 @@ export const useEggs = create<EggsState>()(
           ),
           vendorProducts: restoreStock(s, order),
           capacities: releaseSeat(s.capacities, order),
-          walletPaise: s.walletPaise + refund,
+          ...walletPatch(s, s.walletPaise + refund, refund > 0 ? { direction: "credit", reason: `Refund ${orderId}`, amountPaise: refund, reference: orderId } : undefined),
           audits: [audit(s.vendors.find((v) => v.id === s.activeVendorId)?.name.en ?? "Vendor", "order.reject", `${orderId}: ${reason}`), ...s.audits],
           flash: say(bi("Declined. Stock released. Customer was not moved.", "நிராகரிப்பு. இருப்பு விடுவிக்கப்பட்டது. வாடிக்கையாளர் மாற்றப்படவில்லை.")),
         });
@@ -545,6 +586,7 @@ export const useEggs = create<EggsState>()(
           acceptingOrders: false,
           rider: bi("Rider", "டெலிவரி"),
           pin: "0000",
+          deliveryRadiusKm: 5,
         };
         const rows = s.products.map((p) => ({
           vendorId: id,
@@ -570,7 +612,13 @@ export const useEggs = create<EggsState>()(
             : [...s.favourites, productId],
         });
       },
-      topUp: (paise) => set({ walletPaise: get().walletPaise + paise, flash: say(bi("Wallet topped up.", "பணப்பை நிரப்பப்பட்டது.")) }),
+      topUp: (paise) => {
+        const s = get();
+        set({
+          ...walletPatch(s, s.walletPaise + paise, { direction: "credit", reason: "Preview wallet credit", amountPaise: paise }),
+          flash: say(bi("Preview wallet credited on this device.", "இந்தச் சாதனத்தின் முன்னோட்டப் பணப்பையில் தொகை சேர்க்கப்பட்டது.")),
+        });
+      },
       createSub: ({ productId, pack, qtyPacks, cadence, slotId }) => {
         const s = get();
         if (!s.address || !s.cartVendorId) return;
@@ -721,7 +769,7 @@ export const useEggs = create<EggsState>()(
           ];
         }
         set({
-          walletPaise: wallet,
+          ...walletPatch(s, wallet, status === "refunded" && order && issue.customerKey === "self" ? { direction: "credit", reason: `Issue refund ${order.id}`, amountPaise: order.totalPaise, reference: order.id } : undefined),
           orders,
           complaints: s.complaints.map((c) => (c.id === id ? { ...c, status } : c)),
           audits: [audit("Command", "issue.resolve", `${id} → ${status}`), ...s.audits],
@@ -1000,7 +1048,7 @@ export const useEggs = create<EggsState>()(
       resetDemo: () => set({ ...createCatalogue(), ...session(), flash: say(bi("Preview data reset.", "முன்னோட்டத் தரவு மீட்டமைக்கப்பட்டது.")) }),
     }),
     {
-      name: "eggsclusive-v1",
+      name: "spencers-enterprices-customer-v1",
       version: 1,
       partialize: (state) => ({ ...state, flash: null }),
     },
