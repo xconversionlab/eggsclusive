@@ -42,8 +42,15 @@ jobs:
       - name: Prepare web asset directory
         run: mkdir -p dist
 
-      - name: Add Android project
-        run: npx cap add android
+      - name: Add Android project when not already initialized
+        run: |
+          if [ ! -f android/build.gradle ] && [ ! -f android/build.gradle.kts ]; then
+            # The repository currently contains only android/README.md, not a native project.
+            rm -rf android
+            npx cap add android
+          else
+            echo "Existing Android native project detected; keeping it."
+          fi
 
       - name: Sync Android project
         run: npx cap sync android
