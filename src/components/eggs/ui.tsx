@@ -19,15 +19,15 @@ export function Button({
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "line" | "ghost" | "mark" }) {
   const look = {
-    primary: "bg-ink text-shell",
-    line: "border border-line bg-shell text-ink",
+    primary: "bg-ink text-white shadow-[0_9px_24px_rgba(7,23,46,.18)]",
+    line: "border border-line bg-shell text-ink hover:bg-foam",
     ghost: "bg-transparent text-ink",
-    mark: "bg-mark text-shell",
+    mark: "bg-mark text-white shadow-[0_9px_24px_rgba(22,141,229,.22)]",
   }[variant];
   return (
     <button
       className={cn(
-        "press inline-flex min-h-11 items-center justify-center gap-2 rounded-control px-4 text-sm font-medium disabled:opacity-40",
+        "press inline-flex min-h-12 items-center justify-center gap-2 rounded-control px-4 text-sm font-semibold disabled:opacity-40",
         look,
         className,
       )}
@@ -83,31 +83,22 @@ export function Panel({ className, children }: { className?: string; children: R
 
 export function Wordmark() {
   return (
-    <span className="inline-flex items-center gap-2 font-display text-xl tracking-tight text-ink">
-      <span className="relative block h-5 w-3.5 rounded-full border border-ink bg-shell" aria-hidden>
-        <span className="absolute top-1.5 left-1/2 h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-mark" />
+    <span className="inline-flex min-w-0 items-center gap-2.5">
+      <img src="/spencers-mark.jpg" alt="" className="h-10 w-10 rounded-xl object-cover shadow-[0_5px_14px_rgba(7,23,46,.14)]" />
+      <span className="flex min-w-0 flex-col leading-none">
+        <span className="text-[13px] font-extrabold uppercase tracking-[0.16em] text-ink">Spencers</span>
+        <span className="mt-1 text-[9px] font-bold uppercase tracking-[0.31em] text-mark">Enterprices</span>
       </span>
-      Eggsclusive
     </span>
   );
 }
 
-export function EggMark({ id }: { id: string }) {
-  const quail = id === "quail";
-  const duck = id === "duck";
+export function EggMark({ id: _id }: { id: string }) {
   return (
-    <span className="grid h-20 w-20 place-items-center rounded-card bg-foam" aria-hidden>
-      <span className="relative">
-        <span
-          className={cn(
-            "block rounded-full border border-line",
-            id === "brown" || id === "country" ? "bg-foam" : "bg-shell",
-            quail ? "h-8 w-6" : duck ? "h-14 w-10" : "h-12 w-9",
-          )}
-        />
-        {id === "protein" ? <span className="absolute top-4 left-3 h-3 w-3 rounded-full bg-mark" /> : null}
-        {id === "country" || id === "quail" ? <span className="absolute top-3 right-1 h-1 w-1 rounded-full bg-ink" /> : null}
-        {id === "freerange" ? <span className="absolute -bottom-1 left-1 h-px w-6 bg-mark" /> : null}
+    <span className="relative grid h-24 w-24 shrink-0 place-items-center overflow-hidden rounded-[1.4rem] bg-gradient-to-br from-[#f4f9ff] to-[#deedfb]" aria-hidden>
+      <span className="absolute inset-0 bg-[radial-gradient(circle_at_35%_25%,rgba(255,255,255,.95),transparent_52%)]" />
+      <span className="relative h-[58px] w-[43px] rounded-[52%_52%_46%_46%/60%_60%_40%_40%] border border-[#dce5ee] bg-gradient-to-br from-white via-[#fffefb] to-[#dfe6ed] shadow-[inset_-8px_-9px_13px_rgba(7,23,46,.08),0_8px_18px_rgba(7,23,46,.12)]">
+        <span className="absolute left-[9px] top-[10px] h-5 w-3 rounded-full bg-white/90 blur-[2px]" />
       </span>
     </span>
   );
@@ -132,7 +123,7 @@ export function NavLink({
       className={cn(
         "press inline-flex min-h-11 items-center justify-center rounded-control text-sm transition-colors",
         icon ? "min-h-[58px] flex-col gap-1 px-1 py-2 text-[10px] font-medium leading-tight sm:text-[11px]" : "gap-2 px-3",
-        active ? "bg-ink text-shell" : "text-muted hover:bg-foam/70 hover:text-ink",
+        active ? "bg-ink text-white shadow-sm" : "text-muted hover:bg-foam/70 hover:text-ink",
       )}
     >
       {icon}
