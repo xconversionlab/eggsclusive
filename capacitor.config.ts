@@ -7,9 +7,9 @@ const config: CapacitorConfig = {
   server: {
     // The APK is a lightweight Android shell for the hosted customer app.
     // Checkout and demo data remain connected to the live web deployment.
-    url: "https://eggsclusive-preview-d5b35sp19-xconversionlabs-projects.vercel.app",
+    url: "https://eggsclusive-preview-q2s9xxao7-xconversionlabs-projects.vercel.app",
     cleartext: false,
-    allowNavigation: ["eggsclusive-preview-d5b35sp19-xconversionlabs-projects.vercel.app"],
+    allowNavigation: ["eggsclusive-preview-q2s9xxao7-xconversionlabs-projects.vercel.app"],
   },
   android: {
     allowMixedContent: false,
