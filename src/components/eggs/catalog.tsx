@@ -35,6 +35,7 @@ export function useShop() {
         capacities,
         slots,
         clock,
+        point: address.latitude !== undefined && address.longitude !== undefined ? { lat: address.latitude, lng: address.longitude } : undefined,
       })
     : null;
   const vendorId =
