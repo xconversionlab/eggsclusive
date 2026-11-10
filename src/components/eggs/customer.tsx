@@ -1,4 +1,4 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { addDays, formatDay, formatWhen } from "@/lib/eggs/clock";
@@ -187,6 +187,7 @@ export function ProductBody({ sku }: { sku: string }) {
 
 export function CartBody() {
   const t = useT();
+  const navigate = useNavigate();
   const shop = useShop();
   const cart = useEggs((s) => s.cart);
   const setQty = useEggs((s) => s.setLineQty);
@@ -209,6 +210,7 @@ export function CartBody() {
   const [useWallet, setUseWallet] = useState(false);
   const [code, setCode] = useState("");
   const [upiOpen, setUpiOpen] = useState(false);
+  const [placing, setPlacing] = useState(false);
   const date = datePick === "today" ? shop.clock.isoDate : addDays(shop.clock.isoDate, 1);
   const prior = orders.filter((o) => o.customerKey === "self" && o.status !== "cancelled" && o.status !== "rejected").length;
   const coupon = coupons.find((c) => c.code === couponCode) ?? null;
@@ -247,7 +249,21 @@ export function CartBody() {
   return (
     <Gate>
       <div className="flex flex-col gap-4">
-        <h1 className="font-display text-4xl">{t(bi("Basket", "கூடை"))}</h1>
+        <div>
+          <p className="text-[10px] font-extrabold uppercase tracking-[.2em] text-mark">{t(bi("Checkout", "செலுத்துதல்"))} · DEMO</p>
+          <h1 className="mt-1 font-display text-4xl">{t(bi("Your basket", "உங்கள் கூடை"))}</h1>
+          <p className="mt-2 text-sm leading-5 text-muted">{t(bi("Review your eggs, delivery slot and payment before confirming.", "உறுதி செய்வதற்கு முன் முட்டைகள், விநியோக நேரம் மற்றும் கட்டணத்தைச் சரிபார்க்கவும்."))}</p>
+        </div>
+        {shop.address ? (
+          <Panel className="flex items-start justify-between gap-3 border-[#cfe6fb] bg-[#f5faff]">
+            <div className="min-w-0">
+              <p className="text-[10px] font-extrabold uppercase tracking-[.16em] text-mark">{t(bi("Delivering to", "விநியோக முகவரி"))}</p>
+              <p className="mt-1 text-sm font-bold">{[shop.address.door, shop.address.apartment, shop.address.addressLine, shop.address.landmark].filter(Boolean).join(", ")}</p>
+              <p className="mt-1 text-[10px] text-muted">{shop.address.latitude?.toFixed(5)}, {shop.address.longitude?.toFixed(5)}</p>
+            </div>
+            <button type="button" className="press shrink-0 text-xs font-bold text-mark" onClick={() => useEggs.getState().setEditingStreet(true)}>{t(bi("Change", "மாற்று"))}</button>
+          </Panel>
+        ) : null}
         {cart.length === 0 ? <p className="text-sm text-muted">{t(bi("The basket is empty.", "கூடை காலி."))}</p> : null}
         {cart.map((line) => {
           const product = shop.products.find((p) => p.id === line.productId);
@@ -325,22 +341,42 @@ export function CartBody() {
         </Panel>
         {method === "upi" && due > 0 ? (
           upiOpen ? (
-            <Panel>
-              <p className="text-sm text-muted">{t(bi("UPI ID", "UPI எண்"))}</p>
-              <p className="font-medium">eggsclusive@okaxis</p>
-              <p className="mt-2 text-sm">{t(bi("This preview confirms the payment. It does not charge a bank.", "இந்த முன்னோட்டம் பணத்தை உறுதி செய்கிறது. வங்கியில் பிடிக்காது."))}</p>
-              <Button className="mt-3" data-testid="place-order" disabled={!mine?.eligible || cart.length === 0} onClick={() => place({ slotId, date, method: "upi", useWallet })}>
-                {t(bi("I have paid", "செலுத்திவிட்டேன்"))} · {inr(due, shop.lang)}
+            <Panel className="flex flex-col gap-3 border-[#cfe6fb] bg-[#f5faff]">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-extrabold">{t(bi("Demo UPI payment", "டெமோ UPI கட்டணம்"))}</p>
+                <span className="rounded-full bg-[#dff7eb] px-2 py-1 text-[9px] font-extrabold text-[#087747]">TEST MODE</span>
+              </div>
+              <div className="rounded-xl border border-dashed border-[#b8d8f2] bg-white p-4 text-center">
+                <p className="text-[10px] font-bold uppercase tracking-[.16em] text-muted">{t(bi("Amount to simulate", "டெமோ தொகை"))}</p>
+                <p className="mt-1 text-3xl font-extrabold tabular-nums">{inr(due, shop.lang)}</p>
+                <p className="mt-2 text-xs text-muted">eggsclusive@okaxis</p>
+              </div>
+              <p className="text-xs leading-5 text-muted">{t(bi("No UPI app opens and no money moves. Confirm below to simulate a successful payment for this demo order.", "UPI செயலி திறக்கப்படாது; பணம் பரிமாறப்படாது. டெமோ ஆர்டருக்கான வெற்றிகரமான கட்டணத்தை உருவகப்படுத்த கீழே உறுதி செய்யுங்கள்."))}</p>
+              <Button className="w-full" data-testid="place-order" disabled={!mine?.eligible || cart.length === 0 || placing} onClick={() => {
+                setPlacing(true);
+                window.setTimeout(() => {
+                  const id = place({ slotId, date, method: "upi", useWallet });
+                  if (id) void navigate({ to: "/track/$orderId", params: { orderId: id } });
+                  setPlacing(false);
+                }, 650);
+              }}>
+                {placing ? t(bi("Confirming payment…", "கட்டணத்தை உறுதி செய்கிறது…")) : t(bi("Simulate successful payment", "டெமோ கட்டணத்தை வெற்றிகரமாக்கு"))}
               </Button>
+              <Button variant="line" className="w-full" disabled={placing} onClick={() => setUpiOpen(false)}>{t(bi("Back to payment options", "கட்டண முறைகளுக்குத் திரும்பு"))}</Button>
             </Panel>
           ) : (
-            <Button disabled={!mine?.eligible || cart.length === 0} onClick={() => setUpiOpen(true)}>
-              {t(bi("Pay by UPI", "UPI செலுத்து"))}
+            <Button className="w-full" disabled={!mine?.eligible || cart.length === 0} onClick={() => setUpiOpen(true)}>
+              {t(bi("Continue to demo UPI", "டெமோ UPI-க்கு தொடரவும்"))} · {inr(due, shop.lang)}
             </Button>
           )
         ) : (
-          <Button data-testid="place-order" disabled={!mine?.eligible || cart.length === 0} onClick={() => place({ slotId, date, method: due === 0 ? "wallet" : method, useWallet })}>
-            {t(bi("Place order", "ஆர்டர் செய்"))}
+          <Button className="w-full" data-testid="place-order" disabled={!mine?.eligible || cart.length === 0 || placing} onClick={() => {
+            setPlacing(true);
+            const id = place({ slotId, date, method: due === 0 ? "wallet" : method, useWallet });
+            if (id) void navigate({ to: "/track/$orderId", params: { orderId: id } });
+            setPlacing(false);
+          }}>
+            {placing ? t(bi("Placing your order…", "ஆர்டர் செய்கிறது…")) : due === 0 ? t(bi("Confirm wallet order", "பணப்பை ஆர்டரை உறுதி செய்")) : t(bi("Place cash on delivery order", "பணம் கொடுத்து ஆர்டர் செய்"))}
           </Button>
         )}
       </div>
