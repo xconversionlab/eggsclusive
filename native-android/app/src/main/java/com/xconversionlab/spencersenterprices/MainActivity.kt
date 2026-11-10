@@ -229,7 +229,7 @@ private fun SpencersApp() {
 
     if (showSplash) {
         Box(
-            Modifier.fillMaxSize().background(Paper),
+            Modifier.fillMaxSize().background(Navy),
             contentAlignment = Alignment.Center,
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
