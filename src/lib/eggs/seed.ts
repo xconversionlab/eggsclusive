@@ -500,11 +500,7 @@ export function createCatalogue(): Catalogue {
     vendorProducts: VROWS,
     slots: SLOTS,
     capacities,
-    coupons: [
-      { code: "FIRSTEGG", kind: "percent", value: 20, capPaise: 4000, rule: "first", label: bi("First order · 20% off, up to ₹40", "முதல் ஆர்டர் · 20% தள்ளுபடி, ₹40 வரை"), active: true },
-      { code: "DAWN15", kind: "flat", value: 1500, rule: "early", label: bi("₹15 off dawn and morning slots", "அதிகாலை மற்றும் காலைக்கு ₹15"), active: true },
-      { code: "TRAY30", kind: "flat", value: 3000, rule: "tray", label: bi("₹30 off a tray of 30 or more", "30 அல்லது அதற்கு மேல் தட்டுக்கு ₹30"), active: true },
-    ],
+    coupons: [],
     offers: [],
     orders: [],
     subscriptions: [],
