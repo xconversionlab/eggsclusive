@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.NumberFormat
@@ -165,6 +166,12 @@ private fun SpencersApp() {
     var payment by rememberSaveable { mutableStateOf("Cash on delivery") }
     var showTopUp by remember { mutableStateOf(false) }
     var showMap by remember { mutableStateOf(false) }
+    var showSplash by rememberSaveable { mutableStateOf(true) }
+
+    LaunchedEffect(Unit) {
+        delay(950)
+        showSplash = false
+    }
 
     fun saveProfile(next: CustomerProfile) {
         profile = next
@@ -218,6 +225,20 @@ private fun SpencersApp() {
         tab = MainTab.Activity
         historyPage = "orders"
         scope.launch { snackbar.showSnackbar("Order " + orderId + " placed successfully.") }
+    }
+
+    if (showSplash) {
+        Box(
+            Modifier.fillMaxSize().background(Paper),
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                BrandMark(92.dp, animate = true)
+                Text("SPENCERS ENTERPRICES", color = Blue, fontWeight = FontWeight.ExtraBold, fontSize = 10.sp, letterSpacing = 2.sp)
+                Text("Fresh eggs. Delivered.", color = Navy, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            }
+        }
+        return
     }
 
     if (showMap) {
