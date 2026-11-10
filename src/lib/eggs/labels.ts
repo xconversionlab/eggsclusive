@@ -51,6 +51,10 @@ export const EXCEPTION_LABEL: Record<RouteException, Bi> = {
     "The assigned shop is not taking orders.",
     "ஒதுக்கப்பட்ட கடை ஆர்டர் எடுக்கவில்லை.",
   ),
+  OUTSIDE_SERVICE_RADIUS: bi(
+    "This address is outside the shop’s current delivery radius.",
+    "இந்த முகவரி கடையின் தற்போதைய டெலிவரி எல்லைக்கு வெளியே உள்ளது.",
+  ),
 };
 
 export const ACCOUNT_LABEL: Record<AccountType, Bi> = {
