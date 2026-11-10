@@ -239,6 +239,7 @@ export function CartBody() {
         demand,
         slotId,
         date,
+        point: shop.address.latitude !== undefined && shop.address.longitude !== undefined ? { lat: shop.address.latitude, lng: shop.address.longitude } : undefined,
       })
     : null;
   const mine = decision?.ranked.find((r) => r.vendorId === cartVendorId);
