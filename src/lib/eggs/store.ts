@@ -350,7 +350,7 @@ export const useEggs = create<EggsState>()(
         const due = quote.total - walletOff;
         if (method === "upi" && !s.config.upiEnabled) return null;
         if (method === "cod" && due > 0 && !s.config.codEnabled) return null;
-        const captured = method === "upi" ? quote.total : walletOff;
+        const captured = due === 0 ? walletOff : method === "upi" ? due : walletOff;
         const payMethod: PayMethod = due === 0 ? "wallet" : method;
         const lines = s.cart.map((line) => {
           const row = s.vendorProducts.find((p) => p.vendorId === s.cartVendorId && p.productId === line.productId);
