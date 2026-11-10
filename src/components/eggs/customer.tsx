@@ -123,56 +123,60 @@ export function BrowseBody() {
 export function ProductBody({ sku }: { sku: string }) {
   const t = useT();
   const shop = useShop();
-  const product = shop.products.find((p) => p.id === sku);
-  const add = useEggs((s) => s.addToCart);
-  const createSub = useEggs((s) => s.createSub);
-  const profile = useEggs((s) => s.profile);
-  const [pack, setPack] = useState(product?.packs[0] ?? 6);
+  const product = shop.products.find((item) => item.id === sku);
+  const add = useEggs((state) => state.addToCart);
+  const setQty = useEggs((state) => state.setLineQty);
+  const createSub = useEggs((state) => state.createSub);
+  const quantity = useEggs((state) => state.cart.find((line) => line.productId === sku && line.pack === 1)?.qtyPacks ?? 0);
   const [cadence, setCadence] = useState<"daily" | "weekly">("daily");
   if (!product) {
-    return (
-      <Gate>
-        <p>{t(bi("That egg is not in the catalogue.", "அந்த முட்டை பட்டியலில் இல்லை."))}</p>
-      </Gate>
-    );
+    return <Gate><p>{t(bi("This product is not available.", "இந்தப் பொருள் கிடைக்கவில்லை."))}</p></Gate>;
   }
   const row = priceOf(shop.vendorProducts, shop.vendorId, product.id);
-  const business = profile.accountType !== "home";
-  const packs = product.packs.filter((n) => business || n !== 210);
+  const available = row?.stockEggs ?? 0;
   return (
     <Gate>
-      <div className="flex flex-col gap-4">
-        <EggRow id={product.id} />
-        <div>
-          <h1 className="font-display text-4xl">{t(product.name)}</h1>
-          <p className="mt-2 text-muted">{t(product.blurb)}</p>
-          {row?.batch ? <p className="mt-2 text-sm">{t(row.batch)}</p> : null}
-          {row ? (
-            <p className="mt-3 text-lg tabular-nums">
-              {inr(row.pricePerEggPaise * pack, shop.lang)}
-              <span className="text-sm text-muted"> · {row.stockEggs} {t(bi("eggs left", "முட்டை மீதம்"))}</span>
-            </p>
-          ) : (
-            <p className="mt-3 text-sm text-muted">{t(bi("This shop does not carry it.", "இந்தக் கடை இதை வைத்திருக்கவில்லை."))}</p>
-          )}
+      <div className="flex flex-col gap-5">
+        <div className="relative overflow-hidden rounded-[1.8rem] border border-line bg-white p-5 shadow-panel sm:p-7">
+          <div className="absolute -right-16 -top-16 h-56 w-56 rounded-full bg-[#eaf3fc] blur-2xl" />
+          <div className="relative flex min-h-52 flex-col items-center justify-center text-center">
+            <div className="float-gentle"><EggRow id="egg" /></div>
+            <p className="mt-4 text-[10px] font-extrabold uppercase tracking-[.2em] text-mark">{t(bi("One simple choice", "ஒரே ஒரு எளிய தேர்வு"))}</p>
+            <h1 className="mt-1 text-2xl font-extrabold tracking-tight">{t(product.name)}</h1>
+            <p className="mt-2 max-w-sm text-sm leading-6 text-muted">{t(product.blurb)}</p>
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {packs.map((n) => (
-            <Chip key={n} active={pack === n} onClick={() => setPack(n)}>{packLabel(n, shop.lang)}</Chip>
-          ))}
+        <div className="flex items-end justify-between gap-3 rounded-2xl border border-line bg-white p-4">
+          <div>
+            <p className="text-[10px] font-extrabold uppercase tracking-[.16em] text-muted">{t(bi("Price per egg", "ஒரு முட்டையின் விலை"))}</p>
+            <p className="mt-1 text-2xl font-extrabold tabular-nums">{row ? inr(row.pricePerEggPaise, shop.lang) : "—"}</p>
+            <p className="mt-1 text-xs text-muted">{t(bi("Available", "இருப்பில்"))}: {available} {t(bi("eggs", "முட்டைகள்"))}</p>
+          </div>
+          <div className="flex items-center gap-2 rounded-full border border-[#c9e4fb] bg-[#eef7ff] p-1.5">
+            <button type="button" aria-label={t(bi("Reduce quantity", "எண்ணிக்கையை குறை"))} className="quantity-button grid h-10 w-10 place-items-center rounded-full bg-white text-xl font-bold" disabled={quantity === 0} onClick={() => setQty(product.id, 1, quantity - 1)}>−</button>
+            <span className="min-w-7 text-center text-lg font-extrabold tabular-nums">{quantity}</span>
+            <button type="button" aria-label={t(bi("Add one egg", "ஒரு முட்டை சேர்"))} className="quantity-button grid h-10 w-10 place-items-center rounded-full bg-mark text-xl font-bold text-white" disabled={!row || quantity >= available} onClick={() => add(product.id, 1)}>+</button>
+          </div>
         </div>
-        <Button data-testid="add-pack" disabled={!row || row.stockEggs < pack} onClick={() => add(product.id, pack)}>
-          {t(bi("Add pack", "பொதியைச் சேர்"))}
-        </Button>
+        <div className="flex items-center justify-between px-1">
+          <span className="text-sm font-semibold text-muted">{t(bi("Current total", "தற்போதைய மொத்தம்"))}</span>
+          <span className="text-xl font-extrabold tabular-nums">{inr((row?.pricePerEggPaise ?? 0) * quantity, shop.lang)}</span>
+        </div>
+        <Link to="/cart" className="press blue-glow flex min-h-14 items-center justify-center rounded-2xl bg-ink px-5 text-sm font-extrabold text-white">
+          {t(bi("Continue to basket", "கூடைக்குச் செல்லுங்கள்"))} <span className="ml-2 text-[#69c2ff]">→</span>
+        </Link>
         <Panel className="flex flex-col gap-3">
-          <h2 className="font-medium">{t(bi("Repeat it", "மீண்டும்"))}</h2>
+          <div>
+            <p className="text-[10px] font-extrabold uppercase tracking-[.18em] text-mark">{t(bi("Regular delivery", "தொடர்ச்சியான விநியோகம்"))}</p>
+            <h2 className="mt-1 text-lg font-extrabold">{t(bi("Make eggs a daily essential", "தினசரி தேவையாக முட்டைகளைப் பெறுங்கள்"))}</h2>
+            <p className="mt-1 text-xs leading-5 text-muted">{t(bi("A subscription uses the same local partner and delivery address. It will pause rather than silently switch shops if availability changes.", "சந்தா அதே உள்ளூர் கடை மற்றும் முகவரியைப் பயன்படுத்தும். கிடைப்பில் மாற்றம் ஏற்பட்டால் வேறு கடைக்கு தானாக மாறாது; இடைநிறுத்தப்படும்."))}</p>
+          </div>
           <div className="flex gap-2">
             <Chip active={cadence === "daily"} onClick={() => setCadence("daily")}>{t(bi("Daily", "தினமும்"))}</Chip>
             <Chip active={cadence === "weekly"} onClick={() => setCadence("weekly")}>{t(bi("Weekly", "வாரம்"))}</Chip>
           </div>
-          <p className="text-sm text-muted">{t(bi("Dawn slot, same shop. It will not jump to a backup if this shop is short.", "அதிகாலை, அதே கடை. இருப்பு குறைந்தால் மாற்றுக் கடைக்குத் தானாகப் போகாது."))}</p>
-          <Button variant="line" disabled={!row} onClick={() => createSub({ productId: product.id, pack, qtyPacks: 1, cadence, slotId: "dawn" })}>
-            {t(bi("Start subscription", "சந்தா தொடங்கு"))}
+          <Button variant="line" disabled={!row || quantity < 1} onClick={() => createSub({ productId: product.id, pack: 1, qtyPacks: quantity, cadence, slotId: "dawn" })}>
+            {t(bi("Start with current quantity", "தற்போதைய எண்ணிக்கையுடன் தொடங்கு"))}
           </Button>
         </Panel>
       </div>
@@ -180,21 +184,6 @@ export function ProductBody({ sku }: { sku: string }) {
   );
 }
 
-function EggRow({ id }: { id: string }) {
-  return (
-    <div className="grid h-40 place-items-center rounded-card border border-line bg-foam">
-      <span className={cnEgg(id)} />
-    </div>
-  );
-}
-
-function cnEgg(id: string) {
-  const base = "block rounded-full border border-line ";
-  if (id === "quail") return base + "h-10 w-8 bg-shell";
-  if (id === "duck") return base + "h-24 w-16 bg-shell";
-  if (id === "brown" || id === "country") return base + "h-20 w-14 bg-paper";
-  return base + "h-20 w-14 bg-shell";
-}
 
 export function CartBody() {
   const t = useT();
@@ -216,7 +205,7 @@ export function CartBody() {
   const assignments = useEggs((s) => s.assignments);
   const [datePick, setDatePick] = useState<"today" | "tomorrow">("today");
   const [slotId, setSlotId] = useState("late");
-  const [method, setMethod] = useState<PayMethod>("upi");
+  const [method, setMethod] = useState<PayMethod>("cod");
   const [useWallet, setUseWallet] = useState(false);
   const [code, setCode] = useState("");
   const [upiOpen, setUpiOpen] = useState(false);
@@ -266,12 +255,12 @@ export function CartBody() {
             <Panel key={`${line.productId}-${line.pack}`} className="flex items-center justify-between gap-3">
               <div>
                 <p className="font-medium">{product ? t(product.name) : line.productId}</p>
-                <p className="text-sm text-muted">{packLabel(line.pack, shop.lang)} · {row ? inr(row.pricePerEggPaise * line.pack, shop.lang) : ""}</p>
+                <p className="text-sm text-muted">{t(bi("Quantity", "எண்ணிக்கை"))}: {line.qtyPacks} · {row ? inr(row.pricePerEggPaise, shop.lang) : ""} {t(bi("per egg", "ஒரு முட்டை"))}</p>
               </div>
-              <div className="flex items-center gap-2">
-                <Button variant="line" onClick={() => setQty(line.productId, line.pack, line.qtyPacks - 1)}>-</Button>
-                <span className="w-6 text-center tabular-nums">{line.qtyPacks}</span>
-                <Button variant="line" onClick={() => setQty(line.productId, line.pack, line.qtyPacks + 1)}>+</Button>
+              <div className="flex items-center gap-2 rounded-full border border-[#c9e4fb] bg-[#eef7ff] p-1">
+                <button type="button" className="quantity-button grid h-9 w-9 place-items-center rounded-full bg-white text-xl font-bold" aria-label="Reduce eggs" onClick={() => setQty(line.productId, 1, line.qtyPacks - 1)}>−</button>
+                <span className="min-w-6 text-center text-sm font-extrabold tabular-nums">{line.qtyPacks}</span>
+                <button type="button" className="quantity-button grid h-9 w-9 place-items-center rounded-full bg-mark text-xl font-bold text-white" aria-label="Add one egg" onClick={() => setQty(line.productId, 1, line.qtyPacks + 1)}>+</button>
               </div>
             </Panel>
           );
@@ -526,13 +515,76 @@ export function PlansBody() {
   );
 }
 
+export function WalletBody() {
+  const t = useT();
+  const lang = useEggs((state) => state.lang);
+  const phone = useEggs((state) => state.profile.phone.replace(/\D/g, "").slice(-10));
+  const wallet = useEggs((state) => state.walletPaise);
+  const entries = useEggs(useShallow((state) => state.walletEntries.filter((entry) => entry.phone === phone)));
+  const topUp = useEggs((state) => state.topUp);
+  return (
+    <Gate>
+      <div className="flex flex-col gap-5">
+        <div>
+          <p className="text-[10px] font-extrabold uppercase tracking-[.2em] text-mark">{t(bi("Spencers Enterprices", "Spencers Enterprices"))}</p>
+          <h1 className="mt-1 text-3xl font-extrabold tracking-tight">{t(bi("Your wallet", "உங்கள் பணப்பை"))}</h1>
+          <p className="mt-2 text-sm text-muted">{t(bi("A separate wallet preview for", "தனிப்பட்ட பணப்பை முன்னோட்டம்"))} +91 {phone}</p>
+        </div>
+        <section className="relative overflow-hidden rounded-[1.8rem] bg-gradient-to-br from-[#07172e] via-[#0b2b50] to-[#126db5] p-5 text-white shadow-[0_20px_50px_rgba(7,23,46,.2)]">
+          <div className="absolute -right-10 -top-12 h-40 w-40 rounded-full border border-white/15" />
+          <div className="absolute -right-1 top-12 h-24 w-24 rounded-full border border-white/10" />
+          <div className="relative">
+            <p className="text-[10px] font-bold uppercase tracking-[.2em] text-white/65">{t(bi("Available balance", "கிடைக்கும் இருப்பு"))}</p>
+            <p className="mt-3 text-4xl font-extrabold tabular-nums tracking-tight">{inr(wallet, lang)}</p>
+            <div className="mt-5 flex items-center justify-between border-t border-white/15 pt-3 text-xs text-white/70">
+              <span>SPENCERS ENTERPRICES</span>
+              <span>INR · ₹</span>
+            </div>
+          </div>
+        </section>
+        <Panel className="flex flex-col gap-3">
+          <div>
+            <h2 className="font-extrabold">{t(bi("Add money", "பணம் சேர்க்கவும்"))}</h2>
+            <p className="mt-1 text-xs leading-5 text-muted">{t(bi("Demo credits only. Live wallet top-ups will be connected to a verified payment provider before launch.", "டெமோ தொகை மட்டும். வெளியீட்டிற்கு முன் நேரடி பணப்பை நிரப்புதல் உறுதிப்படுத்தப்பட்ட கட்டண சேவையுடன் இணைக்கப்படும்."))}</p>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <Button variant="line" onClick={() => topUp(20000)}>{t(bi("Add ₹200 demo", "₹200 டெமோ சேர்"))}</Button>
+            <Button variant="line" onClick={() => topUp(50000)}>{t(bi("Add ₹500 demo", "₹500 டெமோ சேர்"))}</Button>
+          </div>
+        </Panel>
+        <div>
+          <div className="flex items-center justify-between px-1">
+            <h2 className="text-lg font-extrabold">{t(bi("Wallet activity", "பணப்பை செயல்பாடுகள்"))}</h2>
+            <span className="text-xs font-semibold text-muted">{entries.length} {t(bi("entries", "பதிவுகள்"))}</span>
+          </div>
+          <div className="mt-3 flex flex-col gap-2">
+            {entries.length === 0 ? (
+              <Panel><p className="text-sm text-muted">{t(bi("Your wallet activity will appear here.", "உங்கள் பணப்பை செயல்பாடுகள் இங்கே தோன்றும்."))}</p></Panel>
+            ) : entries.map((entry) => (
+              <Panel key={entry.id} className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-bold">{entry.reason}</p>
+                  <p className="mt-1 text-[10px] text-muted">{new Date(entry.at).toLocaleString(lang === "ta" ? "ta-IN" : "en-IN")}</p>
+                </div>
+                <div className="text-right">
+                  <p className={cn("text-sm font-extrabold tabular-nums", entry.direction === "credit" ? "text-emerald-700" : "text-ink")}>{entry.direction === "credit" ? "+" : "−"}{inr(entry.amountPaise, lang)}</p>
+                  <p className="mt-1 text-[10px] text-muted">{t(bi("Balance", "இருப்பு"))} {inr(entry.balanceAfterPaise, lang)}</p>
+                </div>
+              </Panel>
+            ))}
+          </div>
+        </div>
+      </div>
+    </Gate>
+  );
+}
+
 export function AccountBody() {
   const t = useT();
   const lang = useEggs((s) => s.lang);
   const profile = useEggs((s) => s.profile);
   const setAccount = useEggs((s) => s.setAccount);
   const wallet = useEggs((s) => s.walletPaise);
-  const topUp = useEggs((s) => s.topUp);
   const support = useEggs((s) => s.support);
   const send = useEggs((s) => s.sendSupport);
   const reset = useEggs((s) => s.resetDemo);
@@ -564,14 +616,14 @@ export function AccountBody() {
           <Button variant="line" onClick={() => setAccount(profile.accountType, business, name)}>{t(bi("Save profile", "சுயவிவரத்தைச் சேமி"))}</Button>
           {profile.accountType !== "home" ? <p className="text-sm text-muted">{t(bi("Trade accounts see bulk trays and a 5% street price.", "வணிகக் கணக்குகள் மொத்த தட்டையும் 5% தெரு விலையையும் பெறும்."))}</p> : null}
         </Panel>
-        <Panel>
-          <h2 className="font-medium">{t(bi("Wallet", "பணப்பை"))}</h2>
-          <p className="mt-1 text-2xl tabular-nums">{inr(wallet, lang)}</p>
-          <div className="mt-3 flex gap-2">
-            <Button variant="line" onClick={() => topUp(20000)}>{t(bi("Add ₹200", "₹200 சேர்"))}</Button>
-            <Button variant="line" onClick={() => topUp(50000)}>{t(bi("Add ₹500", "₹500 சேர்"))}</Button>
+        <Link to="/wallet" className="press rounded-2xl border border-[#cde6fb] bg-[#edf7ff] p-4">
+          <p className="text-[10px] font-extrabold uppercase tracking-[.18em] text-mark">{t(bi("Customer wallet", "வாடிக்கையாளர் பணப்பை"))}</p>
+          <div className="mt-1 flex items-center justify-between gap-3">
+            <span className="text-2xl font-extrabold tabular-nums">{inr(wallet, lang)}</span>
+            <span className="text-xl font-bold text-mark">→</span>
           </div>
-        </Panel>
+          <p className="mt-1 text-xs text-muted">{t(bi("View balance and transaction history", "இருப்பு மற்றும் பரிவர்த்தனை வரலாற்றைப் பார்க்கவும்"))}</p>
+        </Link>
         <Panel>
           <h2 className="font-medium">{t(bi("Saved eggs", "சேமித்த முட்டை"))}</h2>
           <div className="mt-2 flex flex-col gap-2">
