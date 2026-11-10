@@ -64,7 +64,7 @@ export function Onboarding() {
         </p>
         <h1 className="mt-2 font-display text-4xl tracking-tight md:text-5xl">
           {step === 1
-            ? t(bi("Eggs from the street that actually has them.", "முட்டை கிடைக்கும் தெருவிலிருந்தே."))
+            ? t(bi("Fresh eggs, matched to your address.", "உங்கள் முகவரிக்கு பொருந்தும் புதிய முட்டைகள்."))
             : step === 2
               ? t(bi("Which street is the door on?", "வாசல் எந்தத் தெருவில்?"))
               : t(bi("Confirm the door.", "வாசலை உறுதி செய்யுங்கள்."))}
@@ -203,7 +203,7 @@ export function Onboarding() {
           <Panel>
             <p className="text-sm text-muted">{t(localities.find((l) => l.id === street.localityId)?.name ?? bi("", ""))}</p>
             <h2 className="font-display text-3xl">{t(street.name)}</h2>
-            <p className="mt-2 text-sm text-muted">{t(bi("Pin code is recorded. Routing uses the street.", "அஞ்சல் குறியீடு பதிவாகும். வழித்தடம் தெருவைப் பயன்படுத்தும்."))}</p>
+            <p className="mt-2 text-sm text-muted">{t(bi("We use your street as a first service-area check. Your local partner’s active radius and availability determine delivery.", "முதலில் உங்கள் தெருவை வைத்து சேவை பகுதியைச் சரிபார்க்கிறோம். உள்ளூர் கடையின் செயல்பாட்டில் உள்ள எல்லையும் கிடைப்பும் டெலிவரியை நிர்ணயிக்கும்."))}</p>
           </Panel>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field placeholder={t(bi("Door number", "கதவு எண்"))} value={door} onChange={(e) => setDoor(e.target.value)} data-testid="door" />
@@ -266,6 +266,8 @@ export function Onboarding() {
               </div>
               <p className="mt-2 text-sm text-muted">
                 {vendor.hours.open}–{vendor.hours.close}
+                {" · "}
+                {t(bi(`${row.distanceKm} km away · ${vendor.deliveryRadiusKm} km radius`, `${row.distanceKm} கி.மீ. · ${vendor.deliveryRadiusKm} கி.மீ. விநியோக எல்லை`))}
                 {" · "}
                 {row.eligible ? t(bi(`${row.etaMin} min once accepted`, `ஏற்ற பின் ${row.etaMin} நிமிடம்`)) : t(EXCEPTION_LABEL[row.reason ?? "VENDOR_UNAVAILABLE"])}
               </p>
