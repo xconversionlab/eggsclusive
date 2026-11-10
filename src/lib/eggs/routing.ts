@@ -115,6 +115,7 @@ export function rankVendors(input: {
   demand?: Demand[];
   slotId?: string;
   date?: string;
+  point?: { lat: number; lng: number };
 }): RouteDecision {
   const street = input.streets.find((s) => s.id === input.streetId);
   if (!street) return { ok: false, ranked: [], exception: "STREET_UNKNOWN" };
@@ -132,7 +133,7 @@ export function rankVendors(input: {
 
   const ranked: RankedVendor[] = links.map((link) => {
     const vendor = input.vendors.find((v) => v.id === link.vendorId);
-    const distanceKm = vendor ? haversine(street.lat, street.lng, vendor.lat, vendor.lng) : 99;
+    const distanceKm = vendor ? haversine(input.point?.lat ?? street.lat, input.point?.lng ?? street.lng, vendor.lat, vendor.lng) : 99;
     const etaMin = Math.max(18, Math.round(14 + distanceKm * 8));
     const radiusKm = vendor?.deliveryRadiusKm ?? 5;
     const radiusOk = distanceKm <= radiusKm;
