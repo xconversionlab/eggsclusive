@@ -84,7 +84,7 @@ export function Panel({ className, children }: { className?: string; children: R
 export function Wordmark() {
   return (
     <span className="inline-flex min-w-0 items-center gap-2.5">
-      <img src="/spencers-mark.webp" alt="" className="h-10 w-10 rounded-xl object-cover shadow-[0_5px_14px_rgba(7,23,46,.14)]" />
+      <img src="/spencers-mark.webp" alt="" className="brand-mark h-10 w-10 rounded-xl object-cover shadow-[0_5px_14px_rgba(7,23,46,.14)]" />
       <span className="flex min-w-0 flex-col leading-none">
         <span className="text-[13px] font-extrabold uppercase tracking-[0.16em] text-ink">Spencers</span>
         <span className="mt-1 text-[9px] font-bold uppercase tracking-[0.31em] text-mark">Enterprices</span>
