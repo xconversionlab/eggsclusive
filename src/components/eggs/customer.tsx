@@ -614,7 +614,7 @@ export function AccountBody() {
             <Field value={business} placeholder={t(bi("Kitchen or shop name", "சமையலறை அல்லது கடைப் பெயர்"))} onChange={(e) => setBusiness(e.target.value)} />
           ) : null}
           <Button variant="line" onClick={() => setAccount(profile.accountType, business, name)}>{t(bi("Save profile", "சுயவிவரத்தைச் சேமி"))}</Button>
-          {profile.accountType !== "home" ? <p className="text-sm text-muted">{t(bi("Trade accounts see bulk trays and a 5% street price.", "வணிகக் கணக்குகள் மொத்த தட்டையும் 5% தெரு விலையையும் பெறும்."))}</p> : null}
+          {profile.accountType !== "home" ? <p className="text-sm text-muted">{t(bi("Business accounts can use the same fresh-egg ordering experience with their delivery address.", "வணிகக் கணக்குகளும் தங்கள் விநியோக முகவரியுடன் இதே புதிய முட்டை ஆர்டர் அனுபவத்தைப் பயன்படுத்தலாம்."))}</p> : null}
         </Panel>
         <Link to="/wallet" className="press rounded-2xl border border-[#cde6fb] bg-[#edf7ff] p-4">
           <p className="text-[10px] font-extrabold uppercase tracking-[.18em] text-mark">{t(bi("Customer wallet", "வாடிக்கையாளர் பணப்பை"))}</p>
@@ -625,7 +625,7 @@ export function AccountBody() {
           <p className="mt-1 text-xs text-muted">{t(bi("View balance and transaction history", "இருப்பு மற்றும் பரிவர்த்தனை வரலாற்றைப் பார்க்கவும்"))}</p>
         </Link>
         <Panel>
-          <h2 className="font-medium">{t(bi("Saved eggs", "சேமித்த முட்டை"))}</h2>
+          <h2 className="font-medium">{t(bi("Saved item", "சேமித்த பொருள்"))}</h2>
           <div className="mt-2 flex flex-col gap-2">
             {saved.map((p) => (
               <Link key={p.id} to="/product/$sku" params={{ sku: p.id }} className="text-sm underline">{t(p.name)}</Link>
