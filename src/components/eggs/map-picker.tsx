@@ -150,7 +150,7 @@ export function MapPicker({
             <span className="grid h-10 w-10 place-items-center rounded-full border-[3px] border-white bg-[#087fda] text-white shadow-[0_5px_20px_rgba(7,23,46,.38)]">
               <span className="h-2.5 w-2.5 rounded-full bg-white" />
             </span>
-            <span class="-mt-1 h-3 w-3 rotate-45 rounded-[2px] border-b-[3px] border-r-[3px] border-white bg-[#087fda]" />
+            <span className="-mt-1 h-3 w-3 rotate-45 rounded-[2px] border-b-[3px] border-r-[3px] border-white bg-[#087fda]" />
             <span className="mt-1 rounded-full bg-[#07172e]/90 px-2.5 py-1 text-[10px] font-bold tracking-wide text-white shadow-lg">DELIVER HERE</span>
           </div>
         </div>
