@@ -70,7 +70,7 @@ internal val Green = Color(0xFF16845A)
 private const val PRICE_PER_EGG_PAISE = 700
 private const val PREFS_NAME = "spencers_native_customer"
 
-private enum class MainTab(val label: String) { Order("Order"), Activity("History & Wallet"), Profile("Profile") }
+private enum class MainTab(val label: String) { Order("Order"), Activity("Activity"), Profile("Profile") }
 
 private data class CustomerProfile(
     val name: String = "",
@@ -233,8 +233,12 @@ private fun SpencersApp() {
             contentAlignment = Alignment.Center,
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                BrandMark(92.dp, animate = true)
-                Text("SPENCERS ENTERPRICES", color = Blue, fontWeight = FontWeight.ExtraBold, fontSize = 10.sp, letterSpacing = 2.sp)
+                Image(
+                    painter = painterResource(id = R.drawable.spencers_logo),
+                    contentDescription = "Spencers Enterprices original logo",
+                    modifier = Modifier.width(270.dp).height(222.dp),
+                    contentScale = ContentScale.Fit,
+                )
                 Text("Fresh eggs. Delivered.", color = Navy, fontWeight = FontWeight.Bold, fontSize = 18.sp)
             }
         }
@@ -273,7 +277,7 @@ private fun SpencersApp() {
         bottomBar = {
             NavigationBar(containerColor = Color.White, tonalElevation = 10.dp) {
                 NavigationBarItem(tab == MainTab.Order, { tab = MainTab.Order }, icon = { Icon(Icons.Filled.ShoppingBasket, null) }, label = { Text("Order") })
-                NavigationBarItem(tab == MainTab.Activity, { tab = MainTab.Activity }, icon = { Icon(Icons.Filled.History, null) }, label = { Text("History & Wallet", maxLines = 1) })
+                NavigationBarItem(tab == MainTab.Activity, { tab = MainTab.Activity }, icon = { Icon(Icons.Filled.History, null) }, label = { Text("Activity", maxLines = 1) })
                 NavigationBarItem(tab == MainTab.Profile, { tab = MainTab.Profile }, icon = { Icon(Icons.Filled.Person, null) }, label = { Text("Profile") })
             }
         },
@@ -446,7 +450,7 @@ private fun ActivityScreen(
 ) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(15.dp)) {
-        BrandHeader("YOUR ACCOUNT", "History & Wallet", "Everything related to your orders and balance.")
+        BrandHeader("YOUR ACCOUNT", "Activity", "Your order history and wallet transactions.")
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(15.dp)).background(Color.White).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             InnerTab("Order history", page == "orders", Modifier.weight(1f)) { onPageChange("orders") }
             InnerTab("Wallet", page == "wallet", Modifier.weight(1f)) { onPageChange("wallet") }
