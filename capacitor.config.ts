@@ -1,8 +1,8 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
-  appId: "com.xconversionlab.eggsclusive",
-  appName: "Eggsclusive",
+  appId: "com.xconversionlab.spencersenterprices",
+  appName: "Spencers Enterprices",
   webDir: "dist",
   server: {
     // The APK is a lightweight Android shell for the hosted customer app.
