@@ -151,7 +151,7 @@ export function MapPicker({
               <span className="h-2.5 w-2.5 rounded-full bg-white" />
             </span>
             <span class="-mt-1 h-3 w-3 rotate-45 rounded-[2px] border-b-[3px] border-r-[3px] border-white bg-[#087fda]" />
-            <span class="mt-1 rounded-full bg-[#07172e]/90 px-2.5 py-1 text-[10px] font-bold tracking-wide text-white shadow-lg">DELIVER HERE</span>
+            <span className="mt-1 rounded-full bg-[#07172e]/90 px-2.5 py-1 text-[10px] font-bold tracking-wide text-white shadow-lg">DELIVER HERE</span>
           </div>
         </div>
         <div className="absolute right-3 top-3 z-20 flex flex-col overflow-hidden rounded-xl border border-white/80 bg-white/95 shadow-lg backdrop-blur">
