@@ -7,7 +7,7 @@ import { packLabel, quoteCart } from "@/lib/eggs/pricing";
 import { rankVendors, seatsLeft } from "@/lib/eggs/routing";
 import { useEggs } from "@/lib/eggs/store";
 import type { AccountType, PayMethod } from "@/lib/eggs/types";
-import { CityDots, priceOf, ProductCard, StreetLine, useShop } from "./catalog";
+import { priceOf, ProductCard, StreetLine, useShop } from "./catalog";
 import { Gate } from "./frame";
 import { Button, Chip, cn, Field, Panel, TextArea } from "./ui";
 
