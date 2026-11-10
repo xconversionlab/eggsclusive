@@ -9,23 +9,23 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
-      { title: "Eggsclusive — Chennai street eggs" },
+      { title: "Spencers Enterprices — Fresh eggs, delivered" },
       {
         name: "description",
         content:
-          "Neighbourhood egg delivery in Chennai. Matched to your street, not a pin-code guess.",
+          "Fresh eggs delivered to your door, matched to your address and local delivery availability.",
       },
-      { name: "theme-color", content: "#1c1915" },
+      { name: "theme-color", content: "#07172e" },
     ],
     links: [
-      { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
+      { rel: "icon", type: "image/jpeg", href: "/spencers-mark.jpg" },
       { rel: "stylesheet", href: appCss },
       {
         rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Noto+Sans:wght@400;500;600;700&family=Noto+Sans+Tamil:wght@400;500;600;700&display=swap",
+        href: "https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Noto+Sans+Tamil:wght@400;500;600;700&display=swap",
       },
       { rel: "manifest", href: "/__grok/manifest.webmanifest" },
-      { rel: "apple-touch-icon", href: "/__grok/icon-180.png" },
+      { rel: "apple-touch-icon", href: "/spencers-mark.jpg" },
     ],
   }),
   component: () => (
