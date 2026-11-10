@@ -223,6 +223,7 @@ export const useEggs = create<EggsState>()(
           capacities: get().capacities,
           slots: get().slots,
           clock: readChennai(),
+          point: address.latitude !== undefined && address.longitude !== undefined ? { lat: address.latitude, lng: address.longitude } : undefined,
         });
         set({
           address,
@@ -249,6 +250,7 @@ export const useEggs = create<EggsState>()(
           capacities: s.capacities,
           slots: s.slots,
           clock: readChennai(),
+          point: s.address.latitude !== undefined && s.address.longitude !== undefined ? { lat: s.address.latitude, lng: s.address.longitude } : undefined,
         });
         const vendorId =
           s.cartVendorId && decision.ranked.some((r) => r.vendorId === s.cartVendorId && r.eligible)
@@ -312,6 +314,7 @@ export const useEggs = create<EggsState>()(
           capacities: s.capacities,
           slots: s.slots,
           clock: readChennai(),
+          point: s.address.latitude !== undefined && s.address.longitude !== undefined ? { lat: s.address.latitude, lng: s.address.longitude } : undefined,
           demand,
           slotId,
           date,
@@ -673,6 +676,7 @@ export const useEggs = create<EggsState>()(
             capacities,
             slots: s.slots,
             clock,
+            point: sub.address.latitude !== undefined && sub.address.longitude !== undefined ? { lat: sub.address.latitude, lng: sub.address.longitude } : undefined,
             demand: [{ productId: sub.productId, eggs }],
             slotId: sub.slotId,
             date: sub.nextDate,
@@ -829,6 +833,7 @@ export const useEggs = create<EggsState>()(
           capacities: s.capacities,
           slots: s.slots,
           clock: readChennai(),
+          point: order.address.latitude !== undefined && order.address.longitude !== undefined ? { lat: order.address.latitude, lng: order.address.longitude } : undefined,
         });
         const vendorId = decision.recommendedId;
         if (!vendorId) {
