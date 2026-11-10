@@ -267,8 +267,12 @@ private fun SpencersApp() {
             label = "native-tab-transition",
         ) { activeTab ->
             when (activeTab) {
-                MainTab.Order -> OrderScreen(profile, activePartner, quantity, { quantity = it.coerceIn(1, 360) }, slot, { slot = it },
-                    payment, { payment = it }, walletBalance, ::placeOrder, { tab = MainTab.Profile; showMap = true })
+                MainTab.Order -> OrderScreen(
+                    profile, activePartner, quantity, { quantity = it.coerceIn(1, 360) },
+                    slot, { slot = it }, payment, { payment = it }, walletBalance, ::placeOrder,
+                    onOpenProfile = { tab = MainTab.Profile },
+                    onOpenMap = { tab = MainTab.Profile; showMap = true },
+                )
                 MainTab.Activity -> ActivityScreen(historyPage, { historyPage = it }, orders, walletBalance, walletEntries, { showTopUp = true })
                 MainTab.Profile -> ProfileScreen(profile, { profile = it }, { saveProfile(profile); scope.launch { snackbar.showSnackbar("Profile saved on this device.") } }, { showMap = true })
             }
@@ -304,7 +308,7 @@ private fun OrderScreen(
     profile: CustomerProfile, partner: DeliveryPartner?, quantity: Int, onQuantityChange: (Int) -> Unit,
     slot: String, onSlotChange: (String) -> Unit,
     payment: String, onPaymentChange: (String) -> Unit,
-    walletBalance: Int, onPlaceOrder: () -> Unit, onOpenProfile: () -> Unit,
+    walletBalance: Int, onPlaceOrder: () -> Unit, onOpenProfile: () -> Unit, onOpenMap: () -> Unit,
 ) {
     val unitPrice = partner?.pricePerEggPaise ?: PRICE_PER_EGG_PAISE
     val total = quantity * unitPrice
@@ -342,7 +346,7 @@ private fun OrderScreen(
                         Text(quantity.toString(), fontSize = 27.sp, fontWeight = FontWeight.ExtraBold, color = Navy)
                         Text(if (quantity == 1) "egg" else "eggs", fontSize = 11.sp, color = Muted)
                     }
-                    RoundAction(Icons.Filled.Add, "Add quantity") { onQuantityChange(quantity + 1) }
+                    RoundAction(Icons.Filled.Add, "Add quantity", partner != null && quantity < partner.stockEggs) { onQuantityChange(quantity + 1) }
                 }
                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf(6, 12, 30, 60, 120).filter { partner != null && it <= partner.stockEggs }.forEach { value ->
@@ -369,7 +373,7 @@ private fun OrderScreen(
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     Text("Delivery is not available at this pin yet", color = Color(0xFF9A3412), fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     Text("Move your pin to a supported Chennai service area, or check again when service expands.", color = Color(0xFF9A3412), fontSize = 11.sp)
-                    TextButton(onClick = onOpenProfile) { Text("Choose another map location") }
+                    TextButton(onClick = onOpenMap) { Text("Choose another map location") }
                 }
             }
         }
