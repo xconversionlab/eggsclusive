@@ -19,58 +19,71 @@ function useT() {
 export function HomeBody() {
   const t = useT();
   const shop = useShop();
-  const campaign = useEggs((s) => s.campaign);
-  const offers = useEggs((s) => s.offers);
   const orders = useEggs((s) => s.orders);
+  const wallet = useEggs((s) => s.walletPaise);
   const hour = shop.clock.hour;
-  const greet = hour < 12 ? bi("Good morning.", "காலை வணக்கம்.") : hour < 17 ? bi("Good afternoon.", "மதிய வணக்கம்.") : bi("Good evening.", "மாலை வணக்கம்.");
-  const active = orders.find((o) => o.customerKey === "self" && !["delivered", "cancelled", "rejected"].includes(o.status));
-  const offer = offers.find((o) => o.vendorId === shop.vendorId && o.active);
-  const carried = shop.products.filter((p) => p.active && priceOf(shop.vendorProducts, shop.vendorId, p.id));
+  const greet = hour < 12
+    ? bi("Good morning.", "காலை வணக்கம்.")
+    : hour < 17
+      ? bi("Good afternoon.", "மதிய வணக்கம்.")
+      : bi("Good evening.", "மாலை வணக்கம்.");
+  const active = orders.find((order) => order.customerKey === "self" && !["delivered", "cancelled", "rejected"].includes(order.status));
+  const egg = shop.products.find((product) => product.id === "egg" && product.active);
+  const eggRow = egg ? priceOf(shop.vendorProducts, shop.vendorId, egg.id) : null;
   return (
     <Gate>
       <div className="flex flex-col gap-5">
-        <div>
-          <p className="text-sm text-muted">{t(greet)}</p>
-          <h1 className="font-display text-4xl tracking-tight">{t(bi("What the street can deliver today.", "இன்று இந்தத் தெரு வழங்கும் முட்டை."))}</h1>
-        </div>
+        <section className="relative overflow-hidden rounded-[1.8rem] bg-[#07172e] px-5 py-6 text-white shadow-[0_20px_54px_rgba(7,23,46,.18)] sm:px-7 sm:py-8">
+          <div className="pointer-events-none absolute -right-10 -top-12 h-48 w-48 rounded-full border border-white/10" />
+          <div className="pointer-events-none absolute -right-1 top-8 h-32 w-32 rounded-full border border-white/10" />
+          <div className="relative z-10">
+            <p className="text-[10px] font-extrabold uppercase tracking-[.24em] text-[#72c6ff]">{t(bi("Spencers Enterprices · Chennai", "Spencers Enterprices · சென்னை"))}</p>
+            <h1 className="mt-3 max-w-sm text-[2rem] font-extrabold leading-[1.08] tracking-tight sm:text-4xl">{t(bi("Fresh eggs. On your time.", "புதிய முட்டைகள். உங்கள் நேரத்தில்."))}</h1>
+            <p className="mt-3 max-w-sm text-sm leading-6 text-white/70">{t(greet)} {t(bi("Order by the egg. We’ll match your address with an available local delivery partner.", "ஒவ்வொரு முட்டையாக ஆர்டர் செய்யுங்கள். உங்கள் முகவரிக்கு கிடைக்கும் உள்ளூர் டெலிவரி கடையை இணைக்கிறோம்."))}</p>
+            <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-2 text-xs font-semibold text-white/90 backdrop-blur">
+              <span className="h-2 w-2 rounded-full bg-[#56d69a] shadow-[0_0_12px_rgba(86,214,154,.8)]" />
+              {shop.vendor ? t(bi("Delivery partner available", "டெலிவரி கடை கிடைக்கிறது")) : t(bi("Checking your delivery area", "உங்கள் விநியோக பகுதியைச் சரிபார்க்கிறது"))}
+            </div>
+          </div>
+        </section>
         <StreetLine street={shop.street} locality={shop.locality} />
-        {shop.vendor ? (
-          <Panel>
-            <p className="text-sm text-muted">{t(bi("Priced by the shop on your street", "உங்கள் தெருக் கடையின் விலை"))}</p>
-            <h2 className="text-xl font-medium">{t(shop.vendor.name)}</h2>
-            <p className="mt-1 text-sm text-muted">
-              {shop.vendor.hours.open}–{shop.vendor.hours.close} · {shop.vendor.rating.toFixed(1)} · {shop.vendor.reviewCount} {t(bi("ratings", "மதிப்பெண்"))}
-            </p>
-            {offer ? <p className="mt-3 text-sm">{t(offer.title)}. {t(offer.detail)}</p> : null}
-          </Panel>
+        {shop.vendor && shop.street ? (
+          <div className="flex items-center justify-between gap-3 px-1">
+            <div className="min-w-0">
+              <p className="text-[10px] font-extrabold uppercase tracking-[.18em] text-mark">{t(bi("Your local partner", "உங்கள் உள்ளூர் கடை"))}</p>
+              <p className="mt-1 truncate text-sm font-bold">{t(shop.vendor.name)}</p>
+              <p className="mt-0.5 text-xs text-muted">{t(bi("Up to", "அதிகபட்சம்"))} {shop.vendor.deliveryRadiusKm} km {t(bi("service radius", "விநியோக எல்லை"))}</p>
+            </div>
+            <div className="rounded-2xl border border-line bg-white px-3 py-2 text-right">
+              <p className="text-[10px] font-semibold text-muted">{t(bi("Wallet", "பணப்பை"))}</p>
+              <p className="text-sm font-extrabold tabular-nums">{inr(wallet, shop.lang)}</p>
+            </div>
+          </div>
         ) : (
-          <Panel>
-            <p>{t(EXCEPTION_LABEL[shop.decision?.exception ?? "NO_VENDOR"])}</p>
+          <Panel className="border-[#f1d6b4] bg-[#fffaf3]">
+            <p className="text-sm font-bold">{t(EXCEPTION_LABEL[shop.decision?.exception ?? "NO_VENDOR"])}</p>
+            <p className="mt-1 text-xs leading-5 text-muted">{t(bi("You can request service for your street. The delivery team can configure a suitable radius as vendors become available.", "உங்கள் தெருவுக்கு சேவையை கோரலாம். கடைகள் கிடைக்கும் போது டெலிவரி குழு பொருத்தமான எல்லையை அமைக்கலாம்."))}</p>
           </Panel>
         )}
-        {campaign.active ? (
-          <Panel className="bg-foam">
-            <p className="text-sm text-muted">{t(bi("This week", "இந்த வாரம்"))}</p>
-            <h2 className="font-display text-2xl">{t(campaign.title)}</h2>
-            <p className="mt-1 text-sm">{t(campaign.body)}</p>
-          </Panel>
-        ) : null}
         {active ? (
-          <Link to="/track/$orderId" params={{ orderId: active.id }} className="rounded-card border border-line bg-shell p-4">
-            <p className="text-sm text-muted">{active.id}</p>
-            <p className="font-medium">{t(STATUS_LABEL[active.status])}</p>
+          <Link to="/track/$orderId" params={{ orderId: active.id }} className="press flex items-center justify-between rounded-2xl border border-[#cfe6fb] bg-[#eef7ff] p-4">
+            <div>
+              <p className="text-[10px] font-extrabold uppercase tracking-[.16em] text-mark">{t(bi("Order in progress", "நடப்பில் உள்ள ஆர்டர்"))}</p>
+              <p className="mt-1 text-sm font-bold">{active.id}</p>
+              <p className="mt-1 text-xs text-muted">{t(STATUS_LABEL[active.status])}</p>
+            </div>
+            <span className="text-2xl text-mark">↗</span>
           </Link>
         ) : null}
-        <CityDots activeId={shop.locality?.id} />
-        <div className="flex flex-col gap-3">
-          {carried.slice(0, 4).map((p) => (
-            <ProductCard key={p.id} product={p} />
-          ))}
+        <div className="flex items-end justify-between gap-3 px-1">
+          <div>
+            <p className="text-[10px] font-extrabold uppercase tracking-[.2em] text-mark">{t(bi("Simple, everyday", "எளிமையான தினசரி"))}</p>
+            <h2 className="mt-1 text-xl font-extrabold tracking-tight">{t(bi("Your eggs", "உங்கள் முட்டைகள்"))}</h2>
+          </div>
+          <span className="text-xs font-semibold text-muted">{eggRow ? t(bi("In stock", "இருப்பில் உள்ளது")) : t(bi("Check area", "பகுதியைச் சரிபார்க்கவும்"))}</span>
         </div>
-        <Link to="/browse" className="text-sm font-medium underline">
-          {t(bi("All eggs on this street", "இந்தத் தெருவின் அனைத்து முட்டைகளும்"))}
-        </Link>
+        {egg ? <ProductCard product={egg} /> : null}
+        <Link to="/browse" className="press flex min-h-12 items-center justify-center rounded-xl border border-line bg-white text-sm font-bold">{t(bi("Choose quantity and order", "எண்ணிக்கையைத் தேர்வு செய்து ஆர்டர் செய்யுங்கள்"))} <span className="ml-2 text-mark">→</span></Link>
       </div>
     </Gate>
   );
@@ -79,36 +92,28 @@ export function HomeBody() {
 export function BrowseBody() {
   const t = useT();
   const shop = useShop();
-  const [q, setQ] = useState("");
-  const [pack, setPack] = useState<number | null>(null);
-  const [savedOnly, setSavedOnly] = useState(false);
-  const fav = useEggs((s) => s.favourites);
-  const list = shop.products.filter((p) => {
-    if (!p.active) return false;
-    const row = priceOf(shop.vendorProducts, shop.vendorId, p.id);
-    if (!row || row.stockEggs <= 0) return false;
-    if (savedOnly && !fav.includes(p.id)) return false;
-    if (pack && !p.packs.includes(pack)) return false;
-    const hay = `${p.name.en} ${p.name.ta}`.toLowerCase();
-    return hay.includes(q.trim().toLowerCase());
-  });
+  const egg = shop.products.find((product) => product.id === "egg" && product.active);
+  const row = egg ? priceOf(shop.vendorProducts, shop.vendorId, egg.id) : null;
   return (
     <Gate>
-      <div className="flex flex-col gap-4">
-        <h1 className="font-display text-4xl">{t(bi("The case", "பெட்டி"))}</h1>
-        <Field value={q} onChange={(e) => setQ(e.target.value)} placeholder={t(bi("Search varieties", "வகைகளைத் தேடுங்கள்"))} />
-        <div className="flex gap-2 overflow-x-auto">
-          <Chip active={pack === null} onClick={() => setPack(null)}>{t(bi("Any pack", "எந்தப் பொதியும்"))}</Chip>
-          {[6, 12, 30, 210].map((n) => (
-            <Chip key={n} active={pack === n} onClick={() => setPack(n)}>{packLabel(n, shop.lang)}</Chip>
-          ))}
-          <Chip active={savedOnly} onClick={() => setSavedOnly((v) => !v)}>{t(bi("Saved", "சேமிப்பு"))}</Chip>
+      <div className="flex flex-col gap-5">
+        <div>
+          <p className="text-[10px] font-extrabold uppercase tracking-[.2em] text-mark">{t(bi("Spencers Enterprices", "Spencers Enterprices"))}</p>
+          <h1 className="mt-1 text-3xl font-extrabold tracking-tight">{t(bi("Order fresh eggs", "புதிய முட்டைகளை ஆர்டர் செய்யுங்கள்"))}</h1>
+          <p className="mt-2 text-sm leading-6 text-muted">{t(bi("One fresh egg. Any quantity. Add or reduce one at a time, just like your favourite food-delivery app.", "ஒரே ஒரு வகை புதிய முட்டை. வேண்டிய எண்ணிக்கை. உணவு டெலிவரி செயலியைப் போல ஒவ்வொன்றாக கூட்டவும் குறைக்கவும்."))}</p>
         </div>
-        {list.length === 0 ? <p className="text-sm text-muted">{t(bi("Nothing in stock matches.", "இருப்பில் பொருத்தம் இல்லை."))}</p> : null}
-        <div className="flex flex-col gap-3">
-          {list.map((p) => (
-            <ProductCard key={p.id} product={p} />
-          ))}
+        {egg && row && row.stockEggs > 0 ? <ProductCard product={egg} /> : (
+          <Panel className="border-[#f1d6b4] bg-[#fffaf3]">
+            <p className="font-bold">{t(bi("Delivery is not available yet", "டெலிவரி இன்னும் கிடைக்கவில்லை"))}</p>
+            <p className="mt-1 text-sm text-muted">{t(bi("Your address may be outside the current delivery radius, or the local partner may be temporarily unavailable.", "உங்கள் முகவரி தற்போதைய டெலிவரி எல்லைக்கு வெளியே இருக்கலாம் அல்லது உள்ளூர் கடை தற்காலிகமாக கிடைக்காமல் இருக்கலாம்."))}</p>
+          </Panel>
+        )}
+        <div className="flex items-center gap-3 rounded-2xl border border-line bg-white p-4">
+          <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#eaf3fc] text-mark">✓</span>
+          <div>
+            <p className="text-sm font-bold">{t(bi("One product. Clear pricing.", "ஒரே பொருள். தெளிவான விலை."))}</p>
+            <p className="text-xs text-muted">{t(bi("Price is set by the partner serving your delivery area.", "உங்கள் விநியோகப் பகுதியைச் சேவை செய்யும் கடை விலையை நிர்ணயிக்கும்."))}</p>
+          </div>
         </div>
       </div>
     </Gate>
