@@ -6,6 +6,7 @@ on:
       - feat/eggsclusive-production-mvp
     paths:
       - "native-android/**"
+      - "public/spencers-mark.webp"
       - ".github/workflows/android-apk.yml"
       - "android/README.md"
   workflow_dispatch:
