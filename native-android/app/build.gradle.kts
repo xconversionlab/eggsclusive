@@ -36,3 +36,16 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
+
+// Copy the exact same original mark used by the customer web brand to the native
+// Android drawable before resource compilation. This keeps the screen logo and
+// launcher icon visually identical without redrawing it.
+val copyOriginalSpencersLogo by tasks.registering(Copy::class) {
+    from(rootProject.file("../public/spencers-mark.webp"))
+    into(layout.projectDirectory.dir("src/main/res/drawable-nodpi"))
+    rename { "spencers_mark.webp" }
+}
+
+tasks.matching { it.name == "preBuild" }.configureEach {
+    dependsOn(copyOriginalSpencersLogo)
+}
