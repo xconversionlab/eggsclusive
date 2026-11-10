@@ -18,7 +18,8 @@ export type RouteException =
   | "OUTSIDE_HOURS"
   | "NO_STOCK"
   | "CAPACITY_FULL"
-  | "VENDOR_UNAVAILABLE";
+  | "VENDOR_UNAVAILABLE"
+  | "OUTSIDE_SERVICE_RADIUS";
 
 export type RankedVendor = {
   vendorId: string;
@@ -28,6 +29,8 @@ export type RankedVendor = {
   openNow: boolean;
   etaMin: number;
   distanceKm: number;
+  radiusKm: number;
+  radiusOk: boolean;
   stockOk: boolean;
   capacityOk: boolean;
   hoursOk: boolean;
@@ -131,6 +134,8 @@ export function rankVendors(input: {
     const vendor = input.vendors.find((v) => v.id === link.vendorId);
     const distanceKm = vendor ? haversine(street.lat, street.lng, vendor.lat, vendor.lng) : 99;
     const etaMin = Math.max(18, Math.round(14 + distanceKm * 8));
+    const radiusKm = vendor?.deliveryRadiusKm ?? 5;
+    const radiusOk = distanceKm <= radiusKm;
     const shell: RankedVendor = {
       vendorId: link.vendorId,
       role: link.role,
@@ -139,6 +144,8 @@ export function rankVendors(input: {
       openNow: false,
       etaMin,
       distanceKm: Math.round(distanceKm * 10) / 10,
+      radiusKm,
+      radiusOk,
       stockOk: true,
       capacityOk: true,
       hoursOk: true,
@@ -146,6 +153,7 @@ export function rankVendors(input: {
     if (!vendor || vendor.status !== "approved" || !vendor.acceptingOrders) {
       return { ...shell, reason: "VENDOR_UNAVAILABLE" };
     }
+    if (!radiusOk) return { ...shell, reason: "OUTSIDE_SERVICE_RADIUS" };
     const openNow = vendorOpen(vendor, input.clock);
     let stockOk = true;
     if (input.demand?.length) {
@@ -168,7 +176,7 @@ export function rankVendors(input: {
     if (!stockOk) reason = "NO_STOCK";
     else if (!capacityOk) reason = "CAPACITY_FULL";
     else if (!hoursOk) reason = "OUTSIDE_HOURS";
-    const eligible = stockOk && capacityOk && hoursOk;
+    const eligible = radiusOk && stockOk && capacityOk && hoursOk;
     return { ...shell, openNow, stockOk, capacityOk, hoursOk, eligible, reason };
   });
 
