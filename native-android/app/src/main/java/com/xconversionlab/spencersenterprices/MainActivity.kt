@@ -12,7 +12,7 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.animateFloat
-import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -42,6 +42,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.Dp
@@ -76,16 +78,54 @@ private data class CustomerProfile(
     val street: String = "",
     val area: String = "",
     val landmark: String = "",
+    val city: String = "Chennai",
+    val latitude: Double = 13.0003,
+    val longitude: Double = 80.2668,
+    val phoneVerified: Boolean = false,
 ) {
     val isReady: Boolean get() = name.isNotBlank() && phone.filter(Char::isDigit).length == 10 &&
-        door.isNotBlank() && street.isNotBlank() && area.isNotBlank()
-    val address: String get() = listOf(door, street, area, "Chennai").filter { it.isNotBlank() }.joinToString(", ")
+        phoneVerified && door.isNotBlank() && street.isNotBlank() && area.isNotBlank()
+    val address: String get() = listOf(door, street, area, city).filter { it.isNotBlank() }.joinToString(", ")
 }
 
 private data class CustomerOrder(
     val id: String, val createdAt: Long, val quantity: Int, val slot: String,
     val payment: String, val totalPaise: Int, val status: String,
+    val partnerName: String = "",
 )
+
+private data class DeliveryPartner(
+    val name: String,
+    val latitude: Double,
+    val longitude: Double,
+    val pricePerEggPaise: Int,
+    val stockEggs: Int,
+    val radiusKm: Double = 5.0,
+)
+
+private val DELIVERY_PARTNERS = listOf(
+    DeliveryPartner("Murugan Egg Mart", 13.0003, 80.2668, 700, 420),
+    DeliveryPartner("Lakshmi Naatu Kozhi", 13.0368, 80.2676, 720, 280),
+    DeliveryPartner("Anna Fresh Trays", 13.0850, 80.2101, 680, 640),
+    DeliveryPartner("Velachery Sunrise", 12.9815, 80.2180, 740, 180),
+)
+
+private fun distanceKm(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+    val toRadians = { value: Double -> value * Math.PI / 180.0 }
+    val dLat = toRadians(lat2 - lat1)
+    val dLon = toRadians(lon2 - lon1)
+    val a = kotlin.math.sin(dLat / 2) * kotlin.math.sin(dLat / 2) +
+        kotlin.math.cos(toRadians(lat1)) * kotlin.math.cos(toRadians(lat2)) *
+        kotlin.math.sin(dLon / 2) * kotlin.math.sin(dLon / 2)
+    return 6371.0 * 2.0 * kotlin.math.asin(kotlin.math.min(1.0, kotlin.math.sqrt(a)))
+}
+
+private fun servingPartner(profile: CustomerProfile): DeliveryPartner? =
+    DELIVERY_PARTNERS
+        .map { it to distanceKm(profile.latitude, profile.longitude, it.latitude, it.longitude) }
+        .filter { (partner, distance) -> distance <= partner.radiusKm && partner.stockEggs > 0 }
+        .minByOrNull { it.second }
+        ?.first
 
 private data class WalletTransaction(
     val id: String, val createdAt: Long, val title: String, val amountPaise: Int, val balancePaise: Int,
@@ -124,12 +164,16 @@ private fun SpencersApp() {
     var slot by rememberSaveable { mutableStateOf("Morning · 7:30–9:30 AM") }
     var payment by rememberSaveable { mutableStateOf("Cash on delivery") }
     var showTopUp by remember { mutableStateOf(false) }
+    var showMap by remember { mutableStateOf(false) }
 
     fun saveProfile(next: CustomerProfile) {
         profile = next
         prefs.edit().putString("profile_name", next.name).putString("profile_phone", next.phone)
             .putString("profile_door", next.door).putString("profile_street", next.street)
-            .putString("profile_area", next.area).putString("profile_landmark", next.landmark).apply()
+            .putString("profile_area", next.area).putString("profile_landmark", next.landmark)
+            .putString("profile_city", next.city).putFloat("profile_latitude", next.latitude.toFloat())
+            .putFloat("profile_longitude", next.longitude.toFloat())
+            .putBoolean("profile_phone_verified", next.phoneVerified).apply()
     }
     fun updateWallet(nextBalance: Int, entry: WalletTransaction) {
         walletBalance = nextBalance
@@ -140,10 +184,20 @@ private fun SpencersApp() {
     fun placeOrder() {
         if (!profile.isReady) {
             tab = MainTab.Profile
-            scope.launch { snackbar.showSnackbar("Complete your name, 10-digit phone number and delivery address first.") }
+            scope.launch { snackbar.showSnackbar("Complete your profile, verify your demo phone number and add a delivery address first.") }
             return
         }
-        val total = quantity * PRICE_PER_EGG_PAISE
+        val partner = servingPartner(profile)
+        if (partner == null) {
+            tab = MainTab.Profile
+            scope.launch { snackbar.showSnackbar("Delivery is not available at this map location yet. Choose another location.") }
+            return
+        }
+        if (quantity > partner.stockEggs) {
+            scope.launch { snackbar.showSnackbar("Only ${partner.stockEggs} eggs are currently available from ${partner.name}.") }
+            return
+        }
+        val total = quantity * partner.pricePerEggPaise
         if (payment == "Wallet" && walletBalance < total) {
             tab = MainTab.Activity
             historyPage = "wallet"
@@ -152,7 +206,7 @@ private fun SpencersApp() {
         }
         val now = System.currentTimeMillis()
         val orderId = "SP-" + SimpleDateFormat("yyMMdd-HHmmss", Locale.US).format(Date(now))
-        val placed = CustomerOrder(orderId, now, quantity, slot, payment, total, "Order placed")
+        val placed = CustomerOrder(orderId, now, quantity, slot, payment, total, "Order placed", partner.name)
         orders = listOf(placed) + orders
         saveOrders(prefs, orders)
         if (payment == "Wallet") {
@@ -165,6 +219,32 @@ private fun SpencersApp() {
         historyPage = "orders"
         scope.launch { snackbar.showSnackbar("Order " + orderId + " placed successfully.") }
     }
+
+    if (showMap) {
+        MapPickerScreen(
+            initialLatitude = profile.latitude,
+            initialLongitude = profile.longitude,
+            onCancel = { showMap = false },
+            onConfirm = { latitude, longitude ->
+                scope.launch {
+                    val resolved = reverseGeocodeLocation(context, latitude, longitude)
+                    val next = profile.copy(
+                        latitude = latitude,
+                        longitude = longitude,
+                        street = resolved?.street?.takeIf { it.isNotBlank() } ?: profile.street,
+                        area = resolved?.area?.takeIf { it.isNotBlank() } ?: profile.area,
+                        city = resolved?.city?.takeIf { it.isNotBlank() } ?: profile.city,
+                    )
+                    saveProfile(next)
+                    showMap = false
+                    snackbar.showSnackbar("Delivery pin saved. Review the address details before placing an order.")
+                }
+            },
+        )
+        return
+    }
+
+    val activePartner = servingPartner(profile)
 
     Scaffold(
         containerColor = Paper,
@@ -187,10 +267,10 @@ private fun SpencersApp() {
             label = "native-tab-transition",
         ) { activeTab ->
             when (activeTab) {
-                MainTab.Order -> OrderScreen(profile, quantity, { quantity = it.coerceIn(1, 360) }, slot, { slot = it },
-                    payment, { payment = it }, walletBalance, ::placeOrder, { tab = MainTab.Profile })
+                MainTab.Order -> OrderScreen(profile, activePartner, quantity, { quantity = it.coerceIn(1, 360) }, slot, { slot = it },
+                    payment, { payment = it }, walletBalance, ::placeOrder, { tab = MainTab.Profile; showMap = true })
                 MainTab.Activity -> ActivityScreen(historyPage, { historyPage = it }, orders, walletBalance, walletEntries, { showTopUp = true })
-                MainTab.Profile -> ProfileScreen(profile, { profile = it }, { saveProfile(profile); scope.launch { snackbar.showSnackbar("Profile saved on this device.") } })
+                MainTab.Profile -> ProfileScreen(profile, { profile = it }, { saveProfile(profile); scope.launch { snackbar.showSnackbar("Profile saved on this device.") } }, { showMap = true })
             }
         }
     }
@@ -221,12 +301,13 @@ private fun SpencersApp() {
 
 @Composable
 private fun OrderScreen(
-    profile: CustomerProfile, quantity: Int, onQuantityChange: (Int) -> Unit,
+    profile: CustomerProfile, partner: DeliveryPartner?, quantity: Int, onQuantityChange: (Int) -> Unit,
     slot: String, onSlotChange: (String) -> Unit,
     payment: String, onPaymentChange: (String) -> Unit,
     walletBalance: Int, onPlaceOrder: () -> Unit, onOpenProfile: () -> Unit,
 ) {
-    val total = quantity * PRICE_PER_EGG_PAISE
+    val unitPrice = partner?.pricePerEggPaise ?: PRICE_PER_EGG_PAISE
+    val total = quantity * unitPrice
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(15.dp)) {
         BrandHeader("SPENCERS ENTERPRICES", "Fresh eggs, delivered", "Farm-fresh essentials at your doorstep.")
@@ -249,7 +330,8 @@ private fun OrderScreen(
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         Text("Farm Fresh Egg", fontWeight = FontWeight.ExtraBold, fontSize = 17.sp, color = Navy)
                         Text("Clean, carefully handled everyday eggs.", color = Muted, fontSize = 11.sp)
-                        Text(money(PRICE_PER_EGG_PAISE) + " per egg", color = Blue, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Text(money(unitPrice) + " per egg", color = Blue, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Text(if (partner == null) "No delivery partner in this area" else "${partner.stockEggs} eggs in stock", color = if (partner == null) Color(0xFFB45309) else Green, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
                 Divider(color = Line)
@@ -263,7 +345,7 @@ private fun OrderScreen(
                     RoundAction(Icons.Filled.Add, "Add quantity") { onQuantityChange(quantity + 1) }
                 }
                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(6, 12, 30, 60, 120).forEach { value ->
+                    listOf(6, 12, 30, 60, 120).filter { partner != null && it <= partner.stockEggs }.forEach { value ->
                         FilterChip(selected = quantity == value, onClick = { onQuantityChange(value) }, label = { Text(value.toString()) })
                     }
                 }
@@ -271,6 +353,23 @@ private fun OrderScreen(
                     Text("Total", color = Muted, fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.weight(1f))
                     Text(money(total), color = Navy, fontSize = 23.sp, fontWeight = FontWeight.ExtraBold)
+                }
+            }
+        }
+        if (partner != null) {
+            Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(17.dp), modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("YOUR NEAREST DELIVERY PARTNER", color = Blue, fontWeight = FontWeight.ExtraBold, fontSize = 9.sp, letterSpacing = 1.2.sp)
+                    Text(partner.name, color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 15.sp)
+                    Text("Local partner selected from your map pin · ${money(partner.pricePerEggPaise)} per egg", color = Muted, fontSize = 10.sp)
+                }
+            }
+        } else {
+            Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF7ED)), shape = RoundedCornerShape(17.dp), modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Text("Delivery is not available at this pin yet", color = Color(0xFF9A3412), fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Text("Move your pin to a supported Chennai service area, or check again when service expands.", color = Color(0xFF9A3412), fontSize = 11.sp)
+                    TextButton(onClick = onOpenProfile) { Text("Choose another map location") }
                 }
             }
         }
@@ -304,7 +403,8 @@ private fun OrderScreen(
                 }
             }
         }
-        Button(onClick = onPlaceOrder, modifier = Modifier.fillMaxWidth().height(55.dp), shape = RoundedCornerShape(17.dp),
+        Button(onClick = onPlaceOrder, enabled = partner != null && quantity <= (partner?.stockEggs ?: 0),
+            modifier = Modifier.fillMaxWidth().height(55.dp), shape = RoundedCornerShape(17.dp),
             colors = ButtonDefaults.buttonColors(containerColor = Navy)) {
             Text("Place order · " + money(total), fontWeight = FontWeight.ExtraBold, fontSize = 15.sp)
             Icon(Icons.Filled.ArrowForward, null, modifier = Modifier.padding(start = 9.dp))
@@ -347,6 +447,7 @@ private fun ActivityScreen(
                             Text(order.quantity.toString() + " eggs · " + order.slot, color = Ink, fontSize = 12.sp, modifier = Modifier.weight(1f))
                             Text(money(order.totalPaise), color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
                         }
+                        if (order.partnerName.isNotBlank()) Text("Delivery partner: " + order.partnerName, color = Muted, fontSize = 10.sp)
                         Text(when (order.payment) {
                             "UPI · demo" -> "Payment: UPI demo (not charged)"
                             "Wallet" -> "Paid from wallet"
@@ -395,7 +496,10 @@ private fun ActivityScreen(
 }
 
 @Composable
-private fun ProfileScreen(profile: CustomerProfile, onProfileChange: (CustomerProfile) -> Unit, onSave: () -> Unit) {
+private fun ProfileScreen(profile: CustomerProfile, onProfileChange: (CustomerProfile) -> Unit, onSave: () -> Unit, onOpenMap: () -> Unit) {
+    var otpRequested by rememberSaveable { mutableStateOf(false) }
+    var otpCode by rememberSaveable { mutableStateOf("") }
+    var otpError by rememberSaveable { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(15.dp)) {
         BrandHeader("PERSONAL DETAILS", "Your profile", "Keep your delivery details up to date.")
@@ -406,12 +510,47 @@ private fun ProfileScreen(profile: CustomerProfile, onProfileChange: (CustomerPr
                     Text("Contact information", fontWeight = FontWeight.ExtraBold, color = Navy, modifier = Modifier.padding(start = 9.dp))
                 }
                 AppTextField("Full name", profile.name, { onProfileChange(profile.copy(name = it)) })
-                AppTextField("Mobile number", profile.phone, { onProfileChange(profile.copy(phone = it.filter(Char::isDigit).take(10))) }, KeyboardType.Phone)
+                AppTextField("Mobile number", profile.phone, {
+                    onProfileChange(profile.copy(phone = it.filter(Char::isDigit).take(10), phoneVerified = false))
+                    otpRequested = false
+                    otpCode = ""
+                    otpError = false
+                }, KeyboardType.Phone)
+                if (profile.phoneVerified) {
+                    Text("✓ Mobile number verified (demo)", color = Green, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                } else {
+                    OutlinedButton(
+                        onClick = { otpRequested = true; otpCode = ""; otpError = false },
+                        enabled = profile.phone.filter(Char::isDigit).length == 10,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("Verify mobile number") }
+                    if (otpRequested) {
+                        Text("Demo verification code: 482913 · No SMS is sent in this build.", color = Blue, fontSize = 11.sp)
+                        AppTextField("Enter 6-digit code", otpCode, { otpCode = it.filter(Char::isDigit).take(6); otpError = false }, KeyboardType.Number)
+                        Button(
+                            onClick = {
+                                if (otpCode == "482913") {
+                                    onProfileChange(profile.copy(phoneVerified = true))
+                                    otpRequested = false
+                                    otpError = false
+                                } else otpError = true
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(13.dp),
+                        ) { Text("Confirm code") }
+                        if (otpError) Text("That code is not correct. Try 482913.", color = Color(0xFFB91C1C), fontSize = 11.sp)
+                    }
+                }
                 Divider(color = Line)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Filled.LocationOn, null, tint = Blue, modifier = Modifier.size(24.dp))
-                    Text("Delivery address · Chennai", fontWeight = FontWeight.ExtraBold, color = Navy, modifier = Modifier.padding(start = 9.dp))
+                    Text("Delivery address · " + profile.city, fontWeight = FontWeight.ExtraBold, color = Navy, modifier = Modifier.padding(start = 9.dp))
                 }
+                OutlinedButton(onClick = onOpenMap, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(13.dp)) {
+                    Icon(Icons.Filled.LocationOn, contentDescription = null, tint = Blue)
+                    Text("Choose delivery location on map", modifier = Modifier.padding(start = 8.dp), fontWeight = FontWeight.Bold)
+                }
+                Text("Pin: %.5f, %.5f".format(Locale.US, profile.latitude, profile.longitude), color = Muted, fontSize = 10.sp)
                 AppTextField("Door / flat number", profile.door, { onProfileChange(profile.copy(door = it)) })
                 AppTextField("Street / road", profile.street, { onProfileChange(profile.copy(street = it)) })
                 AppTextField("Area / locality", profile.area, { onProfileChange(profile.copy(area = it)) })
@@ -422,7 +561,7 @@ private fun ProfileScreen(profile: CustomerProfile, onProfileChange: (CustomerPr
                     Text("Save profile", fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(start = 8.dp))
                 }
                 Text(if (profile.isReady) "Your details are ready. Tap Save profile to store them on this phone."
-                    else "Enter your name, valid 10-digit phone number, door number, street and area to place an order.",
+                    else "Enter your name, verify your 10-digit mobile number using the demo code, select your map pin and complete the address.",
                     color = if (profile.isReady) Green else Muted, fontSize = 10.sp, lineHeight = 15.sp)
             }
         }
@@ -445,19 +584,19 @@ private fun BrandHeader(kicker: String, title: String, subtitle: String) {
 
 @Composable
 private fun BrandMark(size: Dp, onDark: Boolean = false, animate: Boolean = false) {
-    val transition = androidx.compose.animation.core.rememberInfiniteTransition(label = "spencers-mark")
-    val angle by transition.animateFloat(-4f, 4f,
+    val transition = androidx.compose.animation.core.rememberInfiniteTransition(label = "spencers-original-logo")
+    val angle by transition.animateFloat(-3.5f, 3.5f,
         animationSpec = androidx.compose.animation.core.infiniteRepeatable(
-            androidx.compose.animation.core.tween(1800, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+            androidx.compose.animation.core.tween(1900, easing = androidx.compose.animation.core.FastOutSlowInEasing),
             repeatMode = androidx.compose.animation.core.RepeatMode.Reverse,
-        ), label = "mark-tilt")
-    Box(Modifier.size(size).graphicsLayer { rotationZ = if (animate) angle else 0f }
-        .clip(RoundedCornerShape(size * .31f)).background(if (onDark) Color.White.copy(alpha = .12f) else Navy)
-        .border(1.dp, if (onDark) Color.White.copy(alpha = .2f) else Color.Transparent, RoundedCornerShape(size * .31f)),
-        contentAlignment = Alignment.Center) {
-        Canvas(Modifier.fillMaxSize().padding(size * .16f)) { drawOval(color = Color.White.copy(alpha = .98f)) }
-        Text("S", color = Blue, fontSize = (size.value * .42f).sp, fontWeight = FontWeight.Black)
-    }
+        ), label = "logo-tilt")
+    Image(
+        painter = painterResource(id = R.drawable.spencers_mark),
+        contentDescription = "Spencers Enterprices original logo",
+        modifier = Modifier.size(size).graphicsLayer { rotationZ = if (animate) angle else 0f }
+            .clip(RoundedCornerShape(size * .24f)),
+        contentScale = ContentScale.Fit,
+    )
 }
 
 @Composable
@@ -526,6 +665,10 @@ private fun loadProfile(prefs: SharedPreferences) = CustomerProfile(
     street = prefs.getString("profile_street", "").orEmpty(),
     area = prefs.getString("profile_area", "").orEmpty(),
     landmark = prefs.getString("profile_landmark", "").orEmpty(),
+    city = prefs.getString("profile_city", "Chennai").orEmpty().ifBlank { "Chennai" },
+    latitude = prefs.getFloat("profile_latitude", 13.0003f).toDouble(),
+    longitude = prefs.getFloat("profile_longitude", 80.2668f).toDouble(),
+    phoneVerified = prefs.getBoolean("profile_phone_verified", false),
 )
 
 private fun loadOrders(prefs: SharedPreferences): List<CustomerOrder> = try {
@@ -533,7 +676,8 @@ private fun loadOrders(prefs: SharedPreferences): List<CustomerOrder> = try {
     (0 until array.length()).map { i ->
         val item = array.getJSONObject(i)
         CustomerOrder(item.optString("id"), item.optLong("createdAt"), item.optInt("quantity"),
-            item.optString("slot"), item.optString("payment"), item.optInt("totalPaise"), item.optString("status", "Order placed"))
+            item.optString("slot"), item.optString("payment"), item.optInt("totalPaise"), item.optString("status", "Order placed"),
+            item.optString("partnerName"))
     }.sortedByDescending { it.createdAt }
 } catch (_: Exception) { emptyList() }
 
@@ -542,7 +686,8 @@ private fun saveOrders(prefs: SharedPreferences, orders: List<CustomerOrder>) {
     orders.forEach { order ->
         array.put(JSONObject().apply {
             put("id", order.id); put("createdAt", order.createdAt); put("quantity", order.quantity)
-            put("slot", order.slot); put("payment", order.payment); put("totalPaise", order.totalPaise); put("status", order.status)
+            put("slot", order.slot); put("payment", order.payment); put("totalPaise", order.totalPaise)
+            put("status", order.status); put("partnerName", order.partnerName)
         })
     }
     prefs.edit().putString("orders", array.toString()).apply()
