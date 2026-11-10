@@ -53,6 +53,7 @@ export type Vendor = {
   acceptingOrders: boolean;
   rider: Bi;
   pin: string;
+  deliveryRadiusKm: number;
 };
 
 export type Assignment = {
@@ -121,8 +122,20 @@ export type Address = {
   door: string;
   apartment: string;
   landmark: string;
+  addressLine?: string;
   pin: string;
   confirmed: boolean;
+};
+
+export type WalletEntry = {
+  id: string;
+  phone: string;
+  direction: "credit" | "debit";
+  reason: string;
+  amountPaise: number;
+  balanceAfterPaise: number;
+  at: string;
+  reference?: string;
 };
 
 export type Profile = {
