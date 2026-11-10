@@ -123,6 +123,8 @@ export type Address = {
   apartment: string;
   landmark: string;
   addressLine?: string;
+  latitude?: number;
+  longitude?: number;
   pin: string;
   confirmed: boolean;
 };
