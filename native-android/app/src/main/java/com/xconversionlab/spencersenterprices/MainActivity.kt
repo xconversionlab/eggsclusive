@@ -58,14 +58,14 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
-private val Navy = Color(0xFF07172E)
-private val Blue = Color(0xFF168DE5)
-private val Paper = Color(0xFFF4F7FB)
-private val Ink = Color(0xFF14243A)
-private val Muted = Color(0xFF6B7A90)
-private val Line = Color(0xFFDCE5F0)
-private val PaleBlue = Color(0xFFEAF3FC)
-private val Green = Color(0xFF16845A)
+internal val Navy = Color(0xFF07172E)
+internal val Blue = Color(0xFF168DE5)
+internal val Paper = Color(0xFFF4F7FB)
+internal val Ink = Color(0xFF14243A)
+internal val Muted = Color(0xFF6B7A90)
+internal val Line = Color(0xFFDCE5F0)
+internal val PaleBlue = Color(0xFFEAF3FC)
+internal val Green = Color(0xFF16845A)
 private const val PRICE_PER_EGG_PAISE = 700
 private const val PREFS_NAME = "spencers_native_customer"
 
