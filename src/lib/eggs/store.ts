@@ -231,8 +231,8 @@ export const useEggs = create<EggsState>()(
           cart: [],
           cartVendorId: decision.recommendedId ?? null,
           flash: decision.ok
-            ? say(bi("Street saved. Prices are from the shop on this street.", "தெரு சேமிக்கப்பட்டது. விலை இந்தத் தெருக் கடையிலிருந்து."))
-            : say(bi("Street saved. It is not in service yet.", "தெரு சேமிக்கப்பட்டது. இன்னும் சேவையில் இல்லை.")),
+            ? say(bi("Delivery address saved. Your nearest eligible shop will serve this pin.", "விநியோக முகவரி சேமிக்கப்பட்டது. இந்த இடத்திற்கு அருகிலுள்ள தகுதியான கடை சேவை செய்யும்."))
+            : say(bi("Address saved. Delivery is not available at this pin yet.", "முகவரி சேமிக்கப்பட்டது. இந்த இடத்தில் டெலிவரி இன்னும் கிடைக்கவில்லை.")),
         });
       },
       setEditingStreet: (editingStreet) => set({ editingStreet }),
