@@ -72,8 +72,8 @@ export function Onboarding() {
         <p className="mt-3 text-muted">
           {t(
             bi(
-              "Service follows a street directory in English and Tamil. A pin code alone never assigns a shop.",
-              "சேவை ஆங்கிலம் மற்றும் தமிழ் தெருப் பட்டியலைப் பின்பற்றும். அஞ்சல் குறியீடு மட்டும் கடையை ஒதுக்காது.",
+              "Enter your Chennai street and full door details. We check the selected shop’s current delivery radius, stock and availability before checkout.",
+              "உங்கள் சென்னை தெரு மற்றும் முழு வீட்டு விவரங்களை உள்ளிடுங்கள். கட்டணத்திற்கு முன் கடையின் விநியோக எல்லை, இருப்பு மற்றும் கிடைப்பைச் சரிபார்க்கிறோம்.",
             ),
           )}
         </p>
