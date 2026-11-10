@@ -5,12 +5,13 @@ This is a native Android application built with Kotlin and Jetpack Compose. It d
 ## Three bottom tabs
 
 1. **Order** — choose egg quantity, delivery window and payment, then place an order.
-2. **History & Wallet** — switch between order history and wallet transactions.
+2. **Activity** — switch between order history and wallet transactions.
 3. **Profile** — verify the mobile number using the demo code, edit contact details, and choose a delivery location on the native map.
 
 ## Brand and map
 
-- The exact original `public/spencers-mark.webp` asset is reused for the app's in-screen logo and Android launcher icon.
+- The supplied Spencers Enterprices artwork has been cleanly extracted into vector assets: the complete logo/wordmark, transparent in-app emblem, and matching dark launcher icon. The emblem geometry is shared by the in-app mark and launcher icon.
+- The original logo lock-up appears on the animated startup screen. The symbol is used in the app headers.
 - The map is an interactive native screen using OpenStreetMap tiles. Drag the map to position the fixed doorstep pin, or use the device location permission. The selected pin is reverse-geocoded into address fields when available.
 - Map tiles require an internet connection and include visible OpenStreetMap attribution.
 
