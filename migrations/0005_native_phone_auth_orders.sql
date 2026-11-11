@@ -48,7 +48,7 @@ create table if not exists "native_orders" (
   "partner_shop" text not null,
   "partner_name" text not null,
   "partner_phone" text not null,
-  "delivery_otp_hash" text not null,
+  "delivery_otp_encrypted" text not null,
   "address_label" text not null default 'Home',
   "address_line" text not null,
   "city" text not null,
