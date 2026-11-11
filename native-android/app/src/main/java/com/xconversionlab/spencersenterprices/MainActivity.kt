@@ -402,116 +402,218 @@ private fun SpencersApp() {
 
 @Composable
 private fun OrderScreen(
-    profile: CustomerProfile, partner: DeliveryPartner?, quantity: Int, onQuantityChange: (Int) -> Unit,
-    slot: String, onSlotChange: (String) -> Unit,
-    payment: String, onPaymentChange: (String) -> Unit,
-    walletBalance: Int, onPlaceOrder: () -> Unit, onOpenProfile: () -> Unit, onOpenMap: () -> Unit,
+    profile: CustomerProfile,
+    partner: DeliveryPartner?,
+    quantity: Int,
+    onQuantityChange: (Int) -> Unit,
+    payment: String,
+    onPaymentChange: (String) -> Unit,
+    walletBalance: Int,
+    onPlaceOrder: () -> Unit,
+    onOpenProfile: () -> Unit,
+    onOpenMap: () -> Unit,
+    onPartnerEnquiry: (String, String) -> Unit,
+    onProductEnquiry: (String) -> Unit,
 ) {
     val unitPrice = partner?.pricePerEggPaise ?: PRICE_PER_EGG_PAISE
     val total = quantity * unitPrice
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(15.dp)) {
-        BrandHeader("SPENCERS ENTERPRICES", "Fresh eggs, delivered", "Farm-fresh essentials at your doorstep.")
-        Card(colors = CardDefaults.cardColors(containerColor = Navy), shape = RoundedCornerShape(25.dp), modifier = Modifier.fillMaxWidth()) {
-            Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("FRESH EVERY MORNING", color = Color(0xFF8DCFFF), fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.4.sp)
-                    Text("Good eggs. Simple ordering.", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
-                    Text("Choose your quantity and delivery window.", color = Color.White.copy(alpha = .74f), fontSize = 12.sp, lineHeight = 18.sp)
+    var partnerDialog by rememberSaveable { mutableStateOf(false) }
+    var partnerContactName by rememberSaveable { mutableStateOf("") }
+    var partnerContactPhone by rememberSaveable { mutableStateOf("") }
+
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Navy),
+            shape = RoundedCornerShape(25.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Row(
+                Modifier.fillMaxWidth().padding(18.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Text("SPENCERS ENTERPRISES", color = Color(0xFF8DCFFF), fontSize = 11.sp,
+                        fontWeight = FontWeight.ExtraBold, letterSpacing = 1.5.sp)
+                    Text("Deliver your Home Needs", color = Color.White, fontSize = 20.sp,
+                        fontWeight = FontWeight.ExtraBold, lineHeight = 25.sp)
                 }
-                BrandMark(70.dp, onDark = true, animate = true)
+                BrandMark(62.dp, onDark = true, animate = true)
             }
         }
-        SectionHeading("Your order", "One product · quantity your way")
-        Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(23.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp), modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(13.dp)) {
-                    Box(Modifier.size(60.dp).clip(RoundedCornerShape(18.dp)).background(PaleBlue), contentAlignment = Alignment.Center) { Text("🥚", fontSize = 30.sp) }
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text("Farm Fresh Egg", fontWeight = FontWeight.ExtraBold, fontSize = 17.sp, color = Navy)
-                        Text("Clean, carefully handled everyday eggs.", color = Muted, fontSize = 11.sp)
-                        Text(money(unitPrice) + " per egg", color = Blue, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                        Text(if (partner == null) "No delivery partner in this area" else "${partner.stockEggs} eggs in stock", color = if (partner == null) Color(0xFFB45309) else Green, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+
+        SectionHeading("Products Available", "Choose what you need")
+
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            shape = RoundedCornerShape(21.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Row(
+                Modifier.fillMaxWidth().padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(13.dp),
+            ) {
+                Column(Modifier.width(76.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Box(Modifier.size(46.dp).clip(RoundedCornerShape(14.dp)).background(PaleBlue), contentAlignment = Alignment.Center) {
+                        Text("🥚", fontSize = 26.sp)
                     }
-                }
-                Divider(color = Line)
-                Text("Select quantity", fontWeight = FontWeight.Bold, color = Ink, fontSize = 13.sp)
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    RoundAction(Icons.Filled.Remove, "Reduce quantity", quantity > 1) { onQuantityChange(quantity - 1) }
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(quantity.toString(), fontSize = 27.sp, fontWeight = FontWeight.ExtraBold, color = Navy)
-                        Text(if (quantity == 1) "egg" else "eggs", fontSize = 11.sp, color = Muted)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                        Text("−", color = if (quantity > 1) Navy else Muted, fontWeight = FontWeight.Black,
+                            modifier = Modifier.clickable(enabled = quantity > 1) { onQuantityChange(quantity - 1) })
+                        Text(quantity.toString(), fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = Navy)
+                        Text("+", color = if (partner != null && quantity < partner.stockEggs) Navy else Muted,
+                            fontWeight = FontWeight.Black,
+                            modifier = Modifier.clickable(enabled = partner != null && quantity < partner.stockEggs) { onQuantityChange(quantity + 1) })
                     }
-                    RoundAction(Icons.Filled.Add, "Add quantity", partner != null && quantity < partner.stockEggs) { onQuantityChange(quantity + 1) }
+                    Text("Quantity", color = Muted, fontSize = 9.sp)
                 }
-                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(6, 12, 30, 60, 120).filter { partner != null && it <= partner.stockEggs }.forEach { value ->
-                        FilterChip(selected = quantity == value, onClick = { onQuantityChange(value) }, label = { Text(value.toString()) })
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Text("Fresh Egg", color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 17.sp)
+                    Text(money(unitPrice) + " per egg", color = Blue, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Text("Select quantity below the product image.", color = Muted, fontSize = 10.sp)
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(money(total), color = Navy, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
+                    Text("Line total", color = Muted, fontSize = 9.sp)
+                }
+            }
+        }
+
+        listOf(
+            Triple("Water Can", "🫗", "Price and can size to be confirmed"),
+            Triple("Milk", "🥛", "Price and pack size to be confirmed"),
+            Triple("Curd", "🥣", "Price and pack size to be confirmed"),
+        ).forEach { product ->
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                shape = RoundedCornerShape(18.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(
+                    Modifier.fillMaxWidth().padding(13.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Box(Modifier.size(45.dp).clip(RoundedCornerShape(13.dp)).background(PaleBlue), contentAlignment = Alignment.Center) {
+                        Text(product.second, fontSize = 25.sp)
                     }
-                }
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Total", color = Muted, fontWeight = FontWeight.SemiBold)
-                    Spacer(Modifier.weight(1f))
-                    Text(money(total), color = Navy, fontSize = 23.sp, fontWeight = FontWeight.ExtraBold)
-                }
-            }
-        }
-        if (partner != null) {
-            Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(17.dp), modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("YOUR NEAREST DELIVERY PARTNER", color = Blue, fontWeight = FontWeight.ExtraBold, fontSize = 9.sp, letterSpacing = 1.2.sp)
-                    Text(partner.name, color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 15.sp)
-                    Text("Local partner selected from your map pin · ${money(partner.pricePerEggPaise)} per egg", color = Muted, fontSize = 10.sp)
-                }
-            }
-        } else {
-            Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF7ED)), shape = RoundedCornerShape(17.dp), modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Text("Delivery is not available at this pin yet", color = Color(0xFF9A3412), fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                    Text("Move your pin to a supported Chennai service area, or check again when service expands.", color = Color(0xFF9A3412), fontSize = 11.sp)
-                    TextButton(onClick = onOpenMap) { Text("Choose another map location") }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(product.first, color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp)
+                        Text(product.third, color = Muted, fontSize = 10.sp)
+                    }
+                    TextButton(onClick = { onProductEnquiry(product.first) }) { Text("Enquire", color = Blue, fontWeight = FontWeight.Bold) }
                 }
             }
         }
-        SectionHeading("Delivery window", "Choose when it should arrive")
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("Dawn · 5:30–7:30 AM", "Morning · 7:30–9:30 AM", "Late morning · 9:30–11:30 AM").forEach { option ->
-                SelectableRow(option, if (option.startsWith("Dawn")) "Early drop" else if (option.startsWith("Morning")) "Popular choice" else "Later delivery", slot == option) { onSlotChange(option) }
+
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            shape = RoundedCornerShape(17.dp),
+            modifier = Modifier.fillMaxWidth().clickable { partnerDialog = true },
+        ) {
+            Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(42.dp).clip(RoundedCornerShape(13.dp)).background(PaleBlue), contentAlignment = Alignment.Center) {
+                    Text("🤝", fontSize = 23.sp)
+                }
+                Column(Modifier.weight(1f).padding(start = 11.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text("Partner with us", color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp)
+                    Text("Interested in working with Spencers Enterprices?", color = Muted, fontSize = 10.sp)
+                }
+                Icon(Icons.Filled.ArrowForward, null, tint = Blue)
             }
         }
-        SectionHeading("Payment", "Choose how you want to pay")
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            SelectableRow("Cash on delivery", "Pay when your eggs arrive", payment == "Cash on delivery") { onPaymentChange("Cash on delivery") }
-            SelectableRow("UPI · demo", "Test checkout only. No money is transferred.", payment == "UPI · demo") { onPaymentChange("UPI · demo") }
-            SelectableRow("Wallet", "Available balance: " + money(walletBalance), payment == "Wallet", walletBalance >= total) { onPaymentChange("Wallet") }
-        }
-        Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(19.dp), modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+
+        SectionHeading("Delivery address", "Choose or update the address in your profile")
+        Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(17.dp), modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Filled.LocationOn, null, tint = Blue)
-                    Text("Delivery address", fontWeight = FontWeight.Bold, color = Navy, modifier = Modifier.padding(start = 7.dp))
+                    Text(profile.addressLabel, fontWeight = FontWeight.ExtraBold, color = Navy, modifier = Modifier.padding(start = 7.dp))
                     Spacer(Modifier.weight(1f))
-                    TextButton(onClick = onOpenProfile) { Text(if (profile.isReady) "Edit" else "Add", color = Blue) }
+                    TextButton(onClick = onOpenProfile) { Text("Change", color = Blue) }
                 }
                 if (profile.isReady) {
-                    Text(profile.name, fontWeight = FontWeight.Bold, color = Ink)
-                    Text(profile.address, color = Muted, fontSize = 12.sp, lineHeight = 18.sp)
-                    Text("+91 " + profile.phone, color = Muted, fontSize = 12.sp)
+                    Text(profile.address, color = Ink, fontSize = 12.sp, lineHeight = 18.sp)
                 } else {
-                    Text("Add your delivery details in Profile before placing an order.", color = Muted, fontSize = 12.sp)
+                    Text("Complete your verified profile, city, pincode and address before checkout.", color = Muted, fontSize = 11.sp)
                     OutlinedButton(onClick = onOpenProfile, modifier = Modifier.fillMaxWidth()) { Text("Complete profile") }
+                }
+                OutlinedButton(onClick = onOpenMap, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Filled.LocationOn, null, tint = Blue)
+                    Text("Pin this address on map", modifier = Modifier.padding(start = 7.dp))
                 }
             }
         }
-        Button(onClick = onPlaceOrder, enabled = partner != null && quantity <= (partner?.stockEggs ?: 0),
-            modifier = Modifier.fillMaxWidth().height(55.dp), shape = RoundedCornerShape(17.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Navy)) {
+
+        SectionHeading("Payment method", "Cash on delivery is not available")
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            SelectableRow("UPI · demo", "Demo checkout only. No money is transferred.", payment == "UPI · demo") { onPaymentChange("UPI · demo") }
+            SelectableRow("Wallet", "Available balance: " + money(walletBalance), payment == "Wallet", walletBalance >= total) { onPaymentChange("Wallet") }
+        }
+
+        Card(colors = CardDefaults.cardColors(containerColor = Navy), shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(17.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("ORDER SUMMARY", color = Color(0xFF8DCFFF), fontWeight = FontWeight.ExtraBold, fontSize = 10.sp, letterSpacing = 1.4.sp)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Fresh Egg × $quantity", color = Color.White, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                    Text(money(total), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                }
+                Divider(color = Color.White.copy(alpha = .22f))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Total", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                    Text(money(total), color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 24.sp)
+                }
+            }
+        }
+        Button(
+            onClick = onPlaceOrder,
+            enabled = partner != null && profile.isReady && quantity <= (partner?.stockEggs ?: 0) &&
+                (payment != "Wallet" || walletBalance >= total),
+            modifier = Modifier.fillMaxWidth().height(55.dp),
+            shape = RoundedCornerShape(17.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Navy),
+        ) {
             Text("Place order · " + money(total), fontWeight = FontWeight.ExtraBold, fontSize = 15.sp)
             Icon(Icons.Filled.ArrowForward, null, modifier = Modifier.padding(start = 9.dp))
         }
-        Text("Demo build: orders and profile are stored on this device. Online payment is not connected.",
-            Modifier.fillMaxWidth().padding(bottom = 8.dp), color = Muted, fontSize = 10.sp, lineHeight = 15.sp)
+        if (partner == null) {
+            Text("Ordering is not available for the selected map location yet.", color = Color(0xFF9A3412), fontSize = 11.sp)
+        }
+        Text(
+            "Demo app: order and wallet data are stored on this phone. Live SMS, shared status updates and online payment are not connected.",
+            Modifier.fillMaxWidth().padding(bottom = 8.dp), color = Muted, fontSize = 10.sp, lineHeight = 15.sp,
+        )
+    }
+
+    if (partnerDialog) {
+        AlertDialog(
+            onDismissRequest = { partnerDialog = false },
+            title = { Text("Partner with Spencers Enterprices") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Would you like to partner with us? Share your contact details and we will get back to you.", color = Muted, fontSize = 12.sp)
+                    AppTextField("Your name", partnerContactName, { partnerContactName = it })
+                    AppTextField("Mobile number", partnerContactPhone, { partnerContactPhone = it.filter(Char::isDigit).take(10) }, KeyboardType.Phone)
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onPartnerEnquiry(partnerContactName.trim(), partnerContactPhone)
+                        partnerDialog = false
+                        partnerContactName = ""
+                        partnerContactPhone = ""
+                    },
+                    enabled = partnerContactName.isNotBlank() && partnerContactPhone.length == 10,
+                ) { Text("Yes, contact me") }
+            },
+            dismissButton = { TextButton(onClick = { partnerDialog = false }) { Text("No, thanks") } },
+        )
     }
 }
 
