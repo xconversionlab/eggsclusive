@@ -306,6 +306,18 @@ private fun SpencersApp() {
         return
     }
 
+    if (!profile.phoneVerified) {
+        LoginScreen(
+            onVerify = { name, phone, code ->
+                if (code == "482913") {
+                    saveProfile(profile.copy(name = name.trim(), phone = phone, phoneVerified = true))
+                    true
+                } else false
+            },
+        )
+        return
+    }
+
     if (showMap) {
         MapPickerScreen(
             initialLatitude = profile.latitude,
@@ -369,7 +381,18 @@ private fun SpencersApp() {
                     { saveProfile(profile); scope.launch { snackbar.showSnackbar("Profile and saved addresses updated on this device.") } },
                     { showMap = true },
                     onComplaint = { complaint ->
-                        shareMessage(context, "Customer complaint", "Customer: " + profile.name + "\nPhone: " + profile.phone + "\nComplaint: " + complaint)
+                        val ticketId = "SPC-" + SimpleDateFormat("yyMMdd-HHmmss", Locale.US).format(Date())
+                        val tickets = JSONArray(prefs.getString("support_tickets", "[]"))
+                        tickets.put(JSONObject().apply {
+                            put("id", ticketId); put("createdAt", System.currentTimeMillis())
+                            put("customer", profile.name); put("phone", profile.phone)
+                            put("message", complaint); put("status", "Ready to share")
+                        })
+                        prefs.edit().putString("support_tickets", tickets.toString()).apply()
+                        shareMessage(
+                            context, "Customer complaint $ticketId",
+                            "Ticket: $ticketId\nCustomer: " + profile.name + "\nPhone: " + profile.phone + "\nComplaint: " + complaint,
+                        )
                     },
                 )
             }
@@ -779,13 +802,31 @@ private fun ActivityScreen(
 }
 
 @Composable
-private fun ProfileScreen(profile: CustomerProfile, onProfileChange: (CustomerProfile) -> Unit, onSave: () -> Unit, onOpenMap: () -> Unit) {
+private fun ProfileScreen(
+    profile: CustomerProfile,
+    onProfileChange: (CustomerProfile) -> Unit,
+    onSave: () -> Unit,
+    onOpenMap: () -> Unit,
+    onComplaint: (String) -> Unit,
+) {
     var otpRequested by rememberSaveable { mutableStateOf(false) }
     var otpCode by rememberSaveable { mutableStateOf("") }
     var otpError by rememberSaveable { mutableStateOf(false) }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(15.dp)) {
-        BrandHeader("PERSONAL DETAILS", "Your profile", "Keep your delivery details up to date.")
+    var complaint by rememberSaveable { mutableStateOf("") }
+    var showAddAddress by rememberSaveable { mutableStateOf(false) }
+    var newLabel by rememberSaveable { mutableStateOf("") }
+    var newDoor by rememberSaveable { mutableStateOf("") }
+    var newStreet by rememberSaveable { mutableStateOf("") }
+    var newArea by rememberSaveable { mutableStateOf("") }
+    var newLandmark by rememberSaveable { mutableStateOf("") }
+    var newCity by rememberSaveable { mutableStateOf("Chennai") }
+    var newPincode by rememberSaveable { mutableStateOf("") }
+
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(15.dp),
+    ) {
+        BrandHeader("PERSONAL DETAILS", "Your profile", "Contact details and up to four saved addresses.")
         Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(22.dp), modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -800,16 +841,16 @@ private fun ProfileScreen(profile: CustomerProfile, onProfileChange: (CustomerPr
                     otpError = false
                 }, KeyboardType.Phone)
                 if (profile.phoneVerified) {
-                    Text("✓ Mobile number verified (demo)", color = Green, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text("✓ Mobile verified for this demo session", color = Green, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 } else {
                     OutlinedButton(
                         onClick = { otpRequested = true; otpCode = ""; otpError = false },
                         enabled = profile.phone.filter(Char::isDigit).length == 10,
                         modifier = Modifier.fillMaxWidth(),
-                    ) { Text("Verify mobile number") }
+                    ) { Text("Request OTP") }
                     if (otpRequested) {
-                        Text("Demo verification code: 482913 · No SMS is sent in this build.", color = Blue, fontSize = 11.sp)
-                        AppTextField("Enter 6-digit code", otpCode, { otpCode = it.filter(Char::isDigit).take(6); otpError = false }, KeyboardType.Number)
+                        Text("Demo code: 482913. SMS service is not connected in this build.", color = Color(0xFF9A3412), fontSize = 11.sp)
+                        AppTextField("Enter 6-digit OTP", otpCode, { otpCode = it.filter(Char::isDigit).take(6); otpError = false }, KeyboardType.Number)
                         Button(
                             onClick = {
                                 if (otpCode == "482913") {
@@ -820,36 +861,189 @@ private fun ProfileScreen(profile: CustomerProfile, onProfileChange: (CustomerPr
                             },
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(13.dp),
-                        ) { Text("Confirm code") }
-                        if (otpError) Text("That code is not correct. Try 482913.", color = Color(0xFFB91C1C), fontSize = 11.sp)
+                        ) { Text("Confirm OTP") }
+                        if (otpError) Text("Incorrect demo code.", color = Color(0xFFB91C1C), fontSize = 11.sp)
                     }
                 }
-                Divider(color = Line)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.LocationOn, null, tint = Blue, modifier = Modifier.size(24.dp))
-                    Text("Delivery address · " + profile.city, fontWeight = FontWeight.ExtraBold, color = Navy, modifier = Modifier.padding(start = 9.dp))
+            }
+        }
+
+        SectionHeading("Saved addresses", "${profile.savedAddresses.size.coerceAtLeast(if (profile.address.isNotBlank()) 1 else 0)} of 4 addresses")
+        if (profile.savedAddresses.isNotEmpty()) {
+            profile.savedAddresses.forEach { address ->
+                val selected = address.id == profile.selectedAddressId
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = if (selected) PaleBlue else Color.White),
+                    shape = RoundedCornerShape(17.dp),
+                    modifier = Modifier.fillMaxWidth().clickable { onProfileChange(profile.withAddress(address)) },
+                    border = if (selected) androidx.compose.foundation.BorderStroke(1.dp, Blue) else null,
+                ) {
+                    Row(Modifier.fillMaxWidth().padding(13.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(address.label, color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 13.sp)
+                            Text(address.displayAddress, color = Muted, fontSize = 10.sp, lineHeight = 15.sp)
+                        }
+                        if (selected) {
+                            Text("Selected", color = Blue, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold)
+                        } else TextButton(onClick = { onProfileChange(profile.withAddress(address)) }) { Text("Use", color = Blue) }
+                    }
                 }
+            }
+        } else {
+            Text("No saved address yet. Add your first address below.", color = Muted, fontSize = 11.sp)
+        }
+
+        if (profile.savedAddresses.size < 4) {
+            OutlinedButton(onClick = { showAddAddress = true }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(13.dp)) {
+                Icon(Icons.Filled.Add, null, tint = Blue)
+                Text("Add address", modifier = Modifier.padding(start = 7.dp))
+            }
+        }
+
+        Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(22.dp), modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
+                Text("Selected address", color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 15.sp)
+                AppTextField("Address name (Home / Work / Mother's home)", profile.addressLabel, { onProfileChange(profile.copy(addressLabel = it)) })
                 OutlinedButton(onClick = onOpenMap, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(13.dp)) {
                     Icon(Icons.Filled.LocationOn, contentDescription = null, tint = Blue)
-                    Text("Choose delivery location on map", modifier = Modifier.padding(start = 8.dp), fontWeight = FontWeight.Bold)
+                    Text("Choose this address on map", modifier = Modifier.padding(start = 8.dp), fontWeight = FontWeight.Bold)
                 }
                 Text("Pin: %.5f, %.5f".format(Locale.US, profile.latitude, profile.longitude), color = Muted, fontSize = 10.sp)
                 AppTextField("Door / flat number", profile.door, { onProfileChange(profile.copy(door = it)) })
                 AppTextField("Street / road", profile.street, { onProfileChange(profile.copy(street = it)) })
                 AppTextField("Area / locality", profile.area, { onProfileChange(profile.copy(area = it)) })
                 AppTextField("Landmark (optional)", profile.landmark, { onProfileChange(profile.copy(landmark = it)) })
-                Button(onClick = onSave, enabled = profile.isReady, modifier = Modifier.fillMaxWidth().height(52.dp),
-                    shape = RoundedCornerShape(15.dp), colors = ButtonDefaults.buttonColors(containerColor = Navy)) {
+                AppTextField("City", profile.city, { onProfileChange(profile.copy(city = it)) })
+                AppTextField("6-digit pincode", profile.pincode, { onProfileChange(profile.copy(pincode = it.filter(Char::isDigit).take(6))) }, KeyboardType.Number)
+                Button(
+                    onClick = onSave,
+                    enabled = profile.isReady,
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    shape = RoundedCornerShape(15.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Navy),
+                ) {
                     Icon(Icons.Filled.CheckCircle, null)
-                    Text("Save profile", fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(start = 8.dp))
+                    Text("Save profile and address", fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(start = 8.dp))
                 }
-                Text(if (profile.isReady) "Your details are ready. Tap Save profile to store them on this phone."
-                    else "Enter your name, verify your 10-digit mobile number using the demo code, select your map pin and complete the address.",
-                    color = if (profile.isReady) Green else Muted, fontSize = 10.sp, lineHeight = 15.sp)
+                Text(
+                    if (profile.isReady) "Name, verified mobile, city, pincode and delivery address are complete."
+                    else "Complete your name, verified mobile, door, street, area, city and 6-digit pincode.",
+                    color = if (profile.isReady) Green else Muted, fontSize = 10.sp, lineHeight = 15.sp,
+                )
             }
         }
-        Text("Update these details whenever your delivery address changes.", color = Muted, fontSize = 11.sp)
+
+        Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(22.dp), modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Complaint / Support", color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 15.sp)
+                Text("Describe your issue. Submit opens your share sheet so you can send it through email or WhatsApp.", color = Muted, fontSize = 11.sp, lineHeight = 16.sp)
+                OutlinedTextField(
+                    value = complaint,
+                    onValueChange = { complaint = it },
+                    label = { Text("Write your complaint") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 4,
+                    maxLines = 6,
+                    shape = RoundedCornerShape(13.dp),
+                )
+                Button(
+                    onClick = { onComplaint(complaint.trim()); complaint = "" },
+                    enabled = complaint.trim().length >= 5,
+                    modifier = Modifier.fillMaxWidth().height(50.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Navy),
+                ) { Text("Submit complaint") }
+                Text("A local ticket reference is saved on this phone. It reaches the support team only after you choose and send it from an email or messaging app.", color = Muted, fontSize = 10.sp, lineHeight = 15.sp)
+            }
+        }
         Spacer(Modifier.height(8.dp))
+    }
+
+    if (showAddAddress) {
+        AlertDialog(
+            onDismissRequest = { showAddAddress = false },
+            title = { Text("Add a saved address") },
+            text = {
+                Column(Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    AppTextField("Address name (Home / Work / Mother's home)", newLabel, { newLabel = it })
+                    AppTextField("Door / flat number", newDoor, { newDoor = it })
+                    AppTextField("Street / road", newStreet, { newStreet = it })
+                    AppTextField("Area / locality", newArea, { newArea = it })
+                    AppTextField("Landmark", newLandmark, { newLandmark = it })
+                    AppTextField("City", newCity, { newCity = it })
+                    AppTextField("6-digit pincode", newPincode, { newPincode = it.filter(Char::isDigit).take(6) }, KeyboardType.Number)
+                    Text("After adding, select this address and use the map button to pin the doorstep.", color = Muted, fontSize = 10.sp)
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = newLabel.isNotBlank() && newDoor.isNotBlank() && newStreet.isNotBlank() &&
+                        newArea.isNotBlank() && newCity.isNotBlank() && newPincode.length == 6,
+                    onClick = {
+                        val address = SavedAddress(
+                            "addr-" + System.currentTimeMillis(), newLabel.trim(), newDoor.trim(), newStreet.trim(),
+                            newArea.trim(), newLandmark.trim(), newCity.trim(), newPincode,
+                            profile.latitude, profile.longitude,
+                        )
+                        onProfileChange(profile.withAddress(address))
+                        showAddAddress = false
+                        newLabel = ""; newDoor = ""; newStreet = ""; newArea = ""; newLandmark = ""
+                        newCity = "Chennai"; newPincode = ""
+                    },
+                ) { Text("Save address") }
+            },
+            dismissButton = { TextButton(onClick = { showAddAddress = false }) { Text("Cancel") } },
+        )
+    }
+}
+
+@Composable
+private fun LoginScreen(onVerify: (String, String, String) -> Boolean) {
+    var name by rememberSaveable { mutableStateOf("") }
+    var phone by rememberSaveable { mutableStateOf("") }
+    var otp by rememberSaveable { mutableStateOf("") }
+    var requested by rememberSaveable { mutableStateOf(false) }
+    var error by rememberSaveable { mutableStateOf("") }
+    Column(
+        Modifier.fillMaxSize().background(Paper).verticalScroll(rememberScrollState()).padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Image(
+            painter = painterResource(id = R.drawable.spencers_logo),
+            contentDescription = "Spencers Enterprises",
+            modifier = Modifier.width(240.dp).height(190.dp),
+            contentScale = ContentScale.Fit,
+        )
+        Text("Login to continue", color = Navy, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
+        Text("Mobile verification is required before ordering.", color = Muted, fontSize = 12.sp)
+        Spacer(Modifier.height(18.dp))
+        AppTextField("Your name", name, { name = it })
+        Spacer(Modifier.height(9.dp))
+        AppTextField("10-digit mobile number", phone, { phone = it.filter(Char::isDigit).take(10) }, KeyboardType.Phone)
+        if (!requested) {
+            Button(
+                onClick = { requested = true; error = "" },
+                enabled = name.isNotBlank() && phone.length == 10,
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp).height(52.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Navy),
+            ) { Text("Request OTP") }
+        } else {
+            Text("Demo OTP: 482913 · no SMS is sent in this build.", color = Color(0xFF9A3412), fontSize = 11.sp, modifier = Modifier.padding(top = 10.dp))
+            Spacer(Modifier.height(8.dp))
+            AppTextField("Enter 6-digit OTP", otp, { otp = it.filter(Char::isDigit).take(6) }, KeyboardType.Number)
+            Button(
+                onClick = {
+                    if (!onVerify(name, phone, otp)) error = "Incorrect code. Enter the demo OTP shown above."
+                },
+                enabled = otp.length == 6,
+                modifier = Modifier.fillMaxWidth().padding(top = 10.dp).height(52.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Navy),
+            ) { Text("Verify and login") }
+        }
+        if (error.isNotBlank()) Text(error, color = Color(0xFFB91C1C), fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp))
     }
 }
 
