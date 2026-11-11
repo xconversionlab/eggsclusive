@@ -303,12 +303,50 @@ export async function listNativeOrders(request: Request) {
   return { ok: true as const, orders };
 }
 
-export async function updateNativeOrderStatus(orderId: string, request: Request, body: unknown) {
-  requirePersistentDatabase();
+function isOperationsRequest(request: Request): boolean {
   const expected = env("NATIVE_OPS_API_KEY");
   const supplied = request.headers.get("x-native-ops-key") ?? "";
-  if (!expected || supplied.length !== expected.length ||
-      !timingSafeEqual(Buffer.from(supplied), Buffer.from(expected))) {
+  if (!expected || supplied.length !== expected.length) return false;
+  return timingSafeEqual(Buffer.from(supplied), Buffer.from(expected));
+}
+
+export async function listOperationsNativeOrders(request: Request) {
+  requirePersistentDatabase();
+  if (!isOperationsRequest(request)) {
+    return { ok: false as const, status: 401, error: "Operations authorization failed." };
+  }
+  const sql = await getSql();
+  const rows = await sql.query<Row>(
+    `select id, customer_name, customer_phone, quantity, total_paise, payment_method, status,
+            partner_shop, partner_name, partner_phone, address_label, address_line, city, pincode,
+            created_at, status_changed_at
+       from native_orders
+      order by created_at desc limit 250`,
+  );
+  return {
+    ok: true as const,
+    orders: rows.map((row) => ({
+      id: row.id,
+      customerName: row.customer_name,
+      phone: row.customer_phone,
+      quantity: Number(row.quantity),
+      totalPaise: Number(row.total_paise),
+      payment: row.payment_method,
+      status: row.status,
+      partnerShop: row.partner_shop,
+      partnerName: row.partner_name,
+      partnerPhone: row.partner_phone,
+      addressLabel: row.address_label,
+      deliveryAddress: [row.address_line, row.city, row.pincode].filter(Boolean).join(", "),
+      createdAt: new Date(String(row.created_at)).getTime(),
+      statusChangedAt: new Date(String(row.status_changed_at)).getTime(),
+    })),
+  };
+}
+
+export async function updateNativeOrderStatus(orderId: string, request: Request, body: unknown) {
+  requirePersistentDatabase();
+  if (!isOperationsRequest(request)) {
     return { ok: false as const, status: 401, error: "Operations authorization failed." };
   }
   if (!body || typeof body !== "object" || Array.isArray(body)) return { ok: false as const, status: 400, error: "Invalid status update." };
