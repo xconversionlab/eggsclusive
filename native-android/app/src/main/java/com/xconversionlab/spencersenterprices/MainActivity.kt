@@ -1,6 +1,7 @@
 package com.xconversionlab.spencersenterprices
 
 import android.content.Context
+import android.content.Intent
 import android.content.SharedPreferences
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -54,6 +55,7 @@ import kotlinx.coroutines.delay
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.NumberFormat
+import java.security.SecureRandom
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -201,7 +203,7 @@ private fun SpencersApp() {
     var walletEntries by remember { mutableStateOf(loadWallet(prefs)) }
     var quantity by rememberSaveable { mutableIntStateOf(12) }
     var slot by rememberSaveable { mutableStateOf("Morning · 7:30–9:30 AM") }
-    var payment by rememberSaveable { mutableStateOf("Cash on delivery") }
+    var payment by rememberSaveable { mutableStateOf("UPI · demo") }
     var showTopUp by remember { mutableStateOf(false) }
     var showMap by remember { mutableStateOf(false) }
     var showSplash by rememberSaveable { mutableStateOf(true) }
@@ -212,13 +214,28 @@ private fun SpencersApp() {
     }
 
     fun saveProfile(next: CustomerProfile) {
-        profile = next
-        prefs.edit().putString("profile_name", next.name).putString("profile_phone", next.phone)
-            .putString("profile_door", next.door).putString("profile_street", next.street)
-            .putString("profile_area", next.area).putString("profile_landmark", next.landmark)
-            .putString("profile_city", next.city).putFloat("profile_latitude", next.latitude.toFloat())
-            .putFloat("profile_longitude", next.longitude.toFloat())
-            .putBoolean("profile_phone_verified", next.phoneVerified).apply()
+        val addressId = next.selectedAddressId.ifBlank { "home" }
+        val selected = SavedAddress(addressId, next.addressLabel.ifBlank { "Home" }, next.door, next.street, next.area,
+            next.landmark, next.city, next.pincode, next.latitude, next.longitude)
+        val addresses = (next.savedAddresses.filterNot { it.id == addressId } + selected).takeLast(4)
+        val saved = next.copy(savedAddresses = addresses, selectedAddressId = addressId)
+        profile = saved
+        val array = JSONArray()
+        addresses.forEach { address -> array.put(JSONObject().apply {
+            put("id", address.id); put("label", address.label); put("door", address.door)
+            put("street", address.street); put("area", address.area); put("landmark", address.landmark)
+            put("city", address.city); put("pincode", address.pincode)
+            put("latitude", address.latitude); put("longitude", address.longitude)
+        }) }
+        prefs.edit().putString("profile_name", saved.name).putString("profile_phone", saved.phone)
+            .putString("profile_door", saved.door).putString("profile_street", saved.street)
+            .putString("profile_area", saved.area).putString("profile_landmark", saved.landmark)
+            .putString("profile_city", saved.city).putString("profile_pincode", saved.pincode)
+            .putString("profile_address_label", saved.addressLabel)
+            .putString("profile_selected_address_id", saved.selectedAddressId)
+            .putString("profile_saved_addresses", array.toString())
+            .putFloat("profile_latitude", saved.latitude.toFloat()).putFloat("profile_longitude", saved.longitude.toFloat())
+            .putBoolean("profile_phone_verified", saved.phoneVerified).apply()
     }
     fun updateWallet(nextBalance: Int, entry: WalletTransaction) {
         walletBalance = nextBalance
@@ -244,14 +261,20 @@ private fun SpencersApp() {
         }
         val total = quantity * partner.pricePerEggPaise
         if (payment == "Wallet" && walletBalance < total) {
-            tab = MainTab.Activity
+            tab = MainTab.Status
             historyPage = "wallet"
-            scope.launch { snackbar.showSnackbar("Your wallet balance is not enough. Add demo funds or choose another payment method.") }
+            scope.launch { snackbar.showSnackbar("Your wallet balance is not enough. Choose UPI demo or add demo wallet funds.") }
             return
         }
         val now = System.currentTimeMillis()
         val orderId = "SP-" + SimpleDateFormat("yyMMdd-HHmmss", Locale.US).format(Date(now))
-        val placed = CustomerOrder(orderId, now, quantity, slot, payment, total, "Order placed", partner.name)
+        val otp = (100000 + SecureRandom().nextInt(900000)).toString()
+        val placed = CustomerOrder(
+            id = orderId, createdAt = now, quantity = quantity, slot = "",
+            payment = payment, totalPaise = total, status = "Order placed",
+            partnerName = partner.riderName, partnerPhone = partner.phone, deliveryOtp = otp,
+            addressLabel = profile.addressLabel, deliveryAddress = profile.address,
+        )
         orders = listOf(placed) + orders
         saveOrders(prefs, orders)
         if (payment == "Wallet") {
@@ -259,10 +282,10 @@ private fun SpencersApp() {
             updateWallet(next, WalletTransaction("TX-" + orderId, now, "Payment for " + orderId, -total, next))
         }
         quantity = 12
-        payment = "Cash on delivery"
-        tab = MainTab.Activity
+        payment = "UPI · demo"
+        tab = MainTab.Status
         historyPage = "orders"
-        scope.launch { snackbar.showSnackbar("Order " + orderId + " placed successfully.") }
+        scope.launch { snackbar.showSnackbar("Order " + orderId + " placed. Check Status for your delivery OTP and assigned partner.") }
     }
 
     if (showSplash) {
@@ -277,7 +300,7 @@ private fun SpencersApp() {
                     modifier = Modifier.width(270.dp).height(222.dp),
                     contentScale = ContentScale.Fit,
                 )
-                Text("Fresh eggs. Delivered.", color = Navy, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Text("Deliver your Home Needs", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
             }
         }
         return
@@ -315,7 +338,7 @@ private fun SpencersApp() {
         bottomBar = {
             NavigationBar(containerColor = Color.White, tonalElevation = 10.dp) {
                 NavigationBarItem(tab == MainTab.Order, { tab = MainTab.Order }, icon = { Icon(Icons.Filled.ShoppingBasket, null) }, label = { Text("Order") })
-                NavigationBarItem(tab == MainTab.Activity, { tab = MainTab.Activity }, icon = { Icon(Icons.Filled.History, null) }, label = { Text("Activity", maxLines = 1) })
+                NavigationBarItem(tab == MainTab.Status, { tab = MainTab.Status }, icon = { Icon(Icons.Filled.History, null) }, label = { Text("Status", maxLines = 1) })
                 NavigationBarItem(tab == MainTab.Profile, { tab = MainTab.Profile }, icon = { Icon(Icons.Filled.Person, null) }, label = { Text("Profile") })
             }
         },
@@ -332,12 +355,23 @@ private fun SpencersApp() {
             when (activeTab) {
                 MainTab.Order -> OrderScreen(
                     profile, activePartner, quantity, { quantity = it.coerceIn(1, 360) },
-                    slot, { slot = it }, payment, { payment = it }, walletBalance, ::placeOrder,
+                    payment, { payment = it }, walletBalance, ::placeOrder,
                     onOpenProfile = { tab = MainTab.Profile },
                     onOpenMap = { tab = MainTab.Profile; showMap = true },
+                    onPartnerEnquiry = { name, phone ->
+                        shareMessage(context, "Partner with Spencers Enterprices", "I would like to partner with Spencers Enterprices.\nName: " + name + "\nPhone: " + phone)
+                    },
+                    onProductEnquiry = { product -> shareMessage(context, "Product price enquiry", "Please share availability and price for: " + product) },
                 )
-                MainTab.Activity -> ActivityScreen(historyPage, { historyPage = it }, orders, walletBalance, walletEntries, { showTopUp = true })
-                MainTab.Profile -> ProfileScreen(profile, { profile = it }, { saveProfile(profile); scope.launch { snackbar.showSnackbar("Profile saved on this device.") } }, { showMap = true })
+                MainTab.Status -> ActivityScreen(historyPage, { historyPage = it }, orders, walletBalance, walletEntries, { showTopUp = true })
+                MainTab.Profile -> ProfileScreen(
+                    profile, { profile = it },
+                    { saveProfile(profile); scope.launch { snackbar.showSnackbar("Profile and saved addresses updated on this device.") } },
+                    { showMap = true },
+                    onComplaint = { complaint ->
+                        shareMessage(context, "Customer complaint", "Customer: " + profile.name + "\nPhone: " + profile.phone + "\nComplaint: " + complaint)
+                    },
+                )
             }
         }
     }
