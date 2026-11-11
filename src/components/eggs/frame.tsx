@@ -152,7 +152,7 @@ function Shell({ children }: { children: ReactNode }) {
   const onboarded = useEggs((s) => s.profile.phoneVerified && !!s.address?.confirmed && !s.editingStreet);
   const lang = useEggs((s) => s.lang);
   const t = (text: { en: string; ta: string }) => tx(lang, text);
-  const phaseTwo = path.startsWith("/vendor") || path.startsWith("/admin");
+  const phaseTwo = path.startsWith("/vendor") || (path.startsWith("/admin") && path !== "/admin/native-orders");
   if (phaseTwo) {
     return (
       <main className="mx-auto flex min-h-[70vh] max-w-xl flex-col items-center justify-center px-6 text-center app-enter">
