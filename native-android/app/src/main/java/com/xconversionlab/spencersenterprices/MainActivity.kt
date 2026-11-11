@@ -667,10 +667,10 @@ private fun ActivityScreen(
             if (orders.isEmpty()) {
                 EmptyState("🧺", "No orders yet", "Your order and delivery updates will appear here.")
             } else orders.forEach { order ->
-                val stageNames = listOf("Order placed", "Partner accepted", "Preparing", "Out for delivery", "Delivered")
+                val stageNames = listOf("Order placed", "Partner allocated", "Preparing", "Out for delivery", "Delivered")
                 val stage = when (order.status.lowercase(Locale.US)) {
-                    "order placed", "placed" -> 0
-                    "accepted", "partner accepted" -> 1
+                    "order placed", "placed" -> if (order.partnerName.isNotBlank()) 1 else 0
+                    "accepted", "partner allocated", "partner accepted" -> 1
                     "preparing" -> 2
                     "out_for_delivery", "out for delivery" -> 3
                     "delivered" -> 4
