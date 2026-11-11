@@ -1229,6 +1229,46 @@ private fun saveWallet(prefs: SharedPreferences, entries: List<WalletTransaction
     prefs.edit().putString("wallet_entries", array.toString()).apply()
 }
 
+private fun nativeApiRequest(
+    path: String,
+    method: String,
+    body: JSONObject? = null,
+    bearerToken: String? = null,
+): JSONObject {
+    val base = BuildConfig.API_BASE_URL.trimEnd('/')
+    val connection = (java.net.URL(base + path).openConnection() as java.net.HttpURLConnection).apply {
+        requestMethod = method
+        connectTimeout = 12000
+        readTimeout = 15000
+        doInput = true
+        setRequestProperty("Accept", "application/json")
+        if (body != null) {
+            doOutput = true
+            setRequestProperty("Content-Type", "application/json; charset=utf-8")
+        }
+        if (!bearerToken.isNullOrBlank()) {
+            setRequestProperty("Authorization", "Bearer $bearerToken")
+        }
+    }
+    try {
+        if (body != null) {
+            connection.outputStream.use { output ->
+                output.write(body.toString().toByteArray(Charsets.UTF_8))
+            }
+        }
+        val status = connection.responseCode
+        val stream = if (status in 200..299) connection.inputStream else connection.errorStream
+        val text = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
+        val response = try { if (text.isBlank()) JSONObject() else JSONObject(text) } catch (_: Exception) { JSONObject() }
+        if (status !in 200..299 || response.optBoolean("ok", status in 200..299).not()) {
+            throw IllegalStateException(response.optString("error").ifBlank { "Server request failed ($status)." })
+        }
+        return response
+    } finally {
+        connection.disconnect()
+    }
+}
+
 private fun shareMessage(context: Context, subject: String, message: String) {
     val send = Intent(Intent.ACTION_SEND).apply {
         type = "text/plain"
