@@ -214,11 +214,12 @@ private fun SpencersApp() {
     }
 
     fun saveProfile(next: CustomerProfile) {
+        val hasAddress = next.door.isNotBlank() || next.street.isNotBlank() || next.area.isNotBlank()
         val addressId = next.selectedAddressId.ifBlank { "home" }
         val selected = SavedAddress(addressId, next.addressLabel.ifBlank { "Home" }, next.door, next.street, next.area,
             next.landmark, next.city, next.pincode, next.latitude, next.longitude)
-        val addresses = (next.savedAddresses.filterNot { it.id == addressId } + selected).takeLast(4)
-        val saved = next.copy(savedAddresses = addresses, selectedAddressId = addressId)
+        val addresses = if (hasAddress) (next.savedAddresses.filterNot { it.id == addressId } + selected).takeLast(4) else next.savedAddresses
+        val saved = next.copy(savedAddresses = addresses, selectedAddressId = if (hasAddress) addressId else next.selectedAddressId)
         profile = saved
         val array = JSONArray()
         addresses.forEach { address -> array.put(JSONObject().apply {
@@ -1135,26 +1136,62 @@ private fun AppTextField(label: String, value: String, onValueChange: (String) -
         singleLine = true, shape = RoundedCornerShape(13.dp), keyboardOptions = KeyboardOptions(keyboardType = keyboardType))
 }
 
-private fun loadProfile(prefs: SharedPreferences) = CustomerProfile(
-    name = prefs.getString("profile_name", "").orEmpty(),
-    phone = prefs.getString("profile_phone", "").orEmpty(),
-    door = prefs.getString("profile_door", "").orEmpty(),
-    street = prefs.getString("profile_street", "").orEmpty(),
-    area = prefs.getString("profile_area", "").orEmpty(),
-    landmark = prefs.getString("profile_landmark", "").orEmpty(),
-    city = prefs.getString("profile_city", "Chennai").orEmpty().ifBlank { "Chennai" },
-    latitude = prefs.getFloat("profile_latitude", 13.0003f).toDouble(),
-    longitude = prefs.getFloat("profile_longitude", 80.2668f).toDouble(),
-    phoneVerified = prefs.getBoolean("profile_phone_verified", false),
-)
+private fun loadProfile(prefs: SharedPreferences): CustomerProfile {
+    val name = prefs.getString("profile_name", "").orEmpty()
+    val phone = prefs.getString("profile_phone", "").orEmpty()
+    val door = prefs.getString("profile_door", "").orEmpty()
+    val street = prefs.getString("profile_street", "").orEmpty()
+    val area = prefs.getString("profile_area", "").orEmpty()
+    val landmark = prefs.getString("profile_landmark", "").orEmpty()
+    val city = prefs.getString("profile_city", "Chennai").orEmpty().ifBlank { "Chennai" }
+    val pincode = prefs.getString("profile_pincode", "").orEmpty()
+    val label = prefs.getString("profile_address_label", "Home").orEmpty().ifBlank { "Home" }
+    val latitude = prefs.getFloat("profile_latitude", 13.0003f).toDouble()
+    val longitude = prefs.getFloat("profile_longitude", 80.2668f).toDouble()
+    val addresses = try {
+        val array = JSONArray(prefs.getString("profile_saved_addresses", "[]"))
+        (0 until array.length()).map { i ->
+            val item = array.getJSONObject(i)
+            SavedAddress(
+                item.optString("id"), item.optString("label", "Home"), item.optString("door"),
+                item.optString("street"), item.optString("area"), item.optString("landmark"),
+                item.optString("city", "Chennai"), item.optString("pincode"),
+                item.optDouble("latitude", latitude), item.optDouble("longitude", longitude),
+            )
+        }.takeLast(4)
+    } catch (_: Exception) { emptyList() }
+    val migrated = if (addresses.isEmpty() && (door.isNotBlank() || street.isNotBlank() || area.isNotBlank())) {
+        listOf(SavedAddress("home", label, door, street, area, landmark, city, pincode, latitude, longitude))
+    } else addresses
+    return CustomerProfile(
+        name = name, phone = phone, door = door, street = street, area = area,
+        landmark = landmark, city = city, pincode = pincode, addressLabel = label,
+        latitude = latitude, longitude = longitude,
+        phoneVerified = prefs.getBoolean("profile_phone_verified", false),
+        savedAddresses = migrated,
+        selectedAddressId = prefs.getString("profile_selected_address_id", migrated.firstOrNull()?.id ?: "").orEmpty(),
+    )
+}
 
 private fun loadOrders(prefs: SharedPreferences): List<CustomerOrder> = try {
     val array = JSONArray(prefs.getString("orders", "[]"))
     (0 until array.length()).map { i ->
         val item = array.getJSONObject(i)
-        CustomerOrder(item.optString("id"), item.optLong("createdAt"), item.optInt("quantity"),
-            item.optString("slot"), item.optString("payment"), item.optInt("totalPaise"), item.optString("status", "Order placed"),
-            item.optString("partnerName"))
+        CustomerOrder(
+            id = item.optString("id"),
+            createdAt = item.optLong("createdAt"),
+            quantity = item.optInt("quantity"),
+            slot = item.optString("slot"),
+            payment = item.optString("payment"),
+            totalPaise = item.optInt("totalPaise"),
+            status = item.optString("status", "Order placed"),
+            partnerName = item.optString("partnerName"),
+            partnerPhone = item.optString("partnerPhone"),
+            deliveryOtp = item.optString("deliveryOtp"),
+            addressLabel = item.optString("addressLabel"),
+            deliveryAddress = item.optString("deliveryAddress"),
+            refundApplied = item.optBoolean("refundApplied", false),
+        )
     }.sortedByDescending { it.createdAt }
 } catch (_: Exception) { emptyList() }
 
@@ -1164,7 +1201,9 @@ private fun saveOrders(prefs: SharedPreferences, orders: List<CustomerOrder>) {
         array.put(JSONObject().apply {
             put("id", order.id); put("createdAt", order.createdAt); put("quantity", order.quantity)
             put("slot", order.slot); put("payment", order.payment); put("totalPaise", order.totalPaise)
-            put("status", order.status); put("partnerName", order.partnerName)
+            put("status", order.status); put("partnerName", order.partnerName); put("partnerPhone", order.partnerPhone)
+            put("deliveryOtp", order.deliveryOtp); put("addressLabel", order.addressLabel)
+            put("deliveryAddress", order.deliveryAddress); put("refundApplied", order.refundApplied)
         })
     }
     prefs.edit().putString("orders", array.toString()).apply()
@@ -1188,6 +1227,19 @@ private fun saveWallet(prefs: SharedPreferences, entries: List<WalletTransaction
         })
     }
     prefs.edit().putString("wallet_entries", array.toString()).apply()
+}
+
+private fun shareMessage(context: Context, subject: String, message: String) {
+    val send = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_SUBJECT, subject)
+        putExtra(Intent.EXTRA_TEXT, message)
+    }
+    try {
+        context.startActivity(Intent.createChooser(send, "Share using email or WhatsApp"))
+    } catch (_: Exception) {
+        android.widget.Toast.makeText(context, "No email or messaging app is available on this device.", android.widget.Toast.LENGTH_LONG).show()
+    }
 }
 
 private fun money(paise: Int): String {
