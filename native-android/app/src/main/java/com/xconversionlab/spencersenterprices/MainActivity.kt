@@ -70,7 +70,22 @@ internal val Green = Color(0xFF16845A)
 private const val PRICE_PER_EGG_PAISE = 700
 private const val PREFS_NAME = "spencers_native_customer"
 
-private enum class MainTab(val label: String) { Order("Order"), Activity("Activity"), Profile("Profile") }
+private enum class MainTab(val label: String) { Order("Order"), Status("Status"), Profile("Profile") }
+
+private data class SavedAddress(
+    val id: String,
+    val label: String,
+    val door: String,
+    val street: String,
+    val area: String,
+    val landmark: String,
+    val city: String,
+    val pincode: String,
+    val latitude: Double,
+    val longitude: Double,
+) {
+    val displayAddress: String get() = listOf(door, street, area, city, pincode).filter { it.isNotBlank() }.joinToString(", ")
+}
 
 private data class CustomerProfile(
     val name: String = "",
@@ -80,23 +95,46 @@ private data class CustomerProfile(
     val area: String = "",
     val landmark: String = "",
     val city: String = "Chennai",
+    val pincode: String = "",
+    val addressLabel: String = "Home",
     val latitude: Double = 13.0003,
     val longitude: Double = 80.2668,
     val phoneVerified: Boolean = false,
+    val savedAddresses: List<SavedAddress> = emptyList(),
+    val selectedAddressId: String = "",
 ) {
     val isReady: Boolean get() = name.isNotBlank() && phone.filter(Char::isDigit).length == 10 &&
-        phoneVerified && door.isNotBlank() && street.isNotBlank() && area.isNotBlank()
-    val address: String get() = listOf(door, street, area, city).filter { it.isNotBlank() }.joinToString(", ")
+        phoneVerified && door.isNotBlank() && street.isNotBlank() && area.isNotBlank() &&
+        city.isNotBlank() && pincode.filter(Char::isDigit).length == 6
+    val address: String get() = listOf(door, street, area, city, pincode).filter { it.isNotBlank() }.joinToString(", ")
+    fun selectedAddress(): SavedAddress = savedAddresses.firstOrNull { it.id == selectedAddressId }
+        ?: SavedAddress("home", addressLabel, door, street, area, landmark, city, pincode, latitude, longitude)
+    fun withAddress(address: SavedAddress): CustomerProfile {
+        val next = (savedAddresses.filterNot { it.id == address.id } + address).takeLast(4)
+        return copy(
+            door = address.door, street = address.street, area = address.area, landmark = address.landmark,
+            city = address.city, pincode = address.pincode, addressLabel = address.label,
+            latitude = address.latitude, longitude = address.longitude,
+            savedAddresses = next, selectedAddressId = address.id,
+        )
+    }
 }
 
 private data class CustomerOrder(
     val id: String, val createdAt: Long, val quantity: Int, val slot: String,
     val payment: String, val totalPaise: Int, val status: String,
     val partnerName: String = "",
+    val partnerPhone: String = "",
+    val deliveryOtp: String = "",
+    val addressLabel: String = "",
+    val deliveryAddress: String = "",
+    val refundApplied: Boolean = false,
 )
 
 private data class DeliveryPartner(
-    val name: String,
+    val shopName: String,
+    val riderName: String,
+    val phone: String,
     val latitude: Double,
     val longitude: Double,
     val pricePerEggPaise: Int,
@@ -105,10 +143,10 @@ private data class DeliveryPartner(
 )
 
 private val DELIVERY_PARTNERS = listOf(
-    DeliveryPartner("Murugan Egg Mart", 13.0003, 80.2668, 700, 420),
-    DeliveryPartner("Lakshmi Naatu Kozhi", 13.0368, 80.2676, 720, 280),
-    DeliveryPartner("Anna Fresh Trays", 13.0850, 80.2101, 680, 640),
-    DeliveryPartner("Velachery Sunrise", 12.9815, 80.2180, 740, 180),
+    DeliveryPartner("Murugan Egg Mart", "Selvam", "9841022001", 13.0003, 80.2668, 700, 420),
+    DeliveryPartner("Lakshmi Naatu Kozhi", "Kannan", "9841022014", 13.0368, 80.2676, 720, 280),
+    DeliveryPartner("Anna Fresh Trays", "Imran", "9841022030", 13.0850, 80.2101, 680, 640),
+    DeliveryPartner("Velachery Sunrise", "Divya", "9841022042", 12.9815, 80.2180, 740, 180),
 )
 
 private fun distanceKm(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
