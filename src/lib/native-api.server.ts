@@ -217,6 +217,70 @@ function safeAddress(input: unknown) {
     line: [door, street, area, landmark].filter(Boolean).join(", ") };
 }
 
+const ORDER_STATUS_LABEL: Record<string, string> = {
+  placed: "order placed",
+  accepted: "delivery partner allocated",
+  preparing: "order is being prepared",
+  out_for_delivery: "out for delivery",
+  delivered: "delivered",
+  cancelled: "cancelled",
+};
+
+async function dispatchOrderStatusSms(
+  sql: Awaited<ReturnType<typeof getSql>>,
+  orderId: string,
+  phone: string,
+  status: string,
+): Promise<void> {
+  const outboxId = randomUUID();
+  const vars = { orderId, status: ORDER_STATUS_LABEL[status] ?? status };
+  const templateId = env("TWOFACTOR_STATUS_TEMPLATE_ID");
+  if (!templateId) {
+    await sql.query(
+      "insert into native_sms_outbox (id, order_id, recipient, template_kind, template_vars, status, error) values ($1,$2,$3,'order_status',$4::jsonb,'not_configured','Transactional DLT template is not configured')",
+      [outboxId, orderId, phone, JSON.stringify(vars)],
+    );
+    return;
+  }
+  await sql.query(
+    "insert into native_sms_outbox (id, order_id, recipient, template_kind, template_vars, status) values ($1,$2,$3,'order_status',$4::jsonb,'queued')",
+    [outboxId, orderId, phone, JSON.stringify(vars)],
+  );
+  const apiKey = env("TWOFACTOR_API_KEY");
+  if (!apiKey) {
+    await sql.query("update native_sms_outbox set status = 'not_configured', error = '2Factor API key is not configured', updated_at = now() where id = $1", [outboxId]);
+    return;
+  }
+  try {
+    const response = await fetch("https://2factor.in/API/V1/SMS/SEND", {
+      method: "POST",
+      headers: { "content-type": "application/json", "accept": "application/json", "X-API-Key": apiKey },
+      body: JSON.stringify({
+        to: phone,
+        template_id: templateId,
+        var1: vars.orderId,
+        var2: vars.status,
+      }),
+      signal: AbortSignal.timeout(12000),
+    });
+    const body = await response.json().catch(() => ({})) as {
+      status?: string; type?: string; Status?: string; message?: string; session_id?: string;
+    };
+    const providerStatus = String(body.status ?? body.type ?? body.Status ?? "").toLowerCase();
+    const accepted = response.ok && ["success", "sent", "submitted"].includes(providerStatus);
+    await sql.query(
+      "update native_sms_outbox set status = $2, provider_message_id = $3, error = $4, updated_at = now() where id = $1",
+      [outboxId, accepted ? "submitted" : "failed", body.session_id ?? body.message ?? null,
+        accepted ? null : (body.message ?? "Provider did not accept the status message.")],
+    );
+  } catch (error) {
+    await sql.query(
+      "update native_sms_outbox set status = 'failed', error = $2, updated_at = now() where id = $1",
+      [outboxId, error instanceof Error ? error.message.slice(0, 240) : "SMS request failed"],
+    );
+  }
+}
+
 export async function createNativeOrder(request: Request, body: unknown) {
   requirePersistentDatabase();
   const customer = await authenticateNativeRequest(request);
@@ -253,6 +317,7 @@ export async function createNativeOrder(request: Request, body: unknown) {
     "insert into native_order_events (id, order_id, from_status, to_status, note, actor) values ($1,$2,null,'placed','Order placed by customer','customer')",
     [randomUUID(), orderId],
   );
+  await dispatchOrderStatusSms(sql, orderId, customer.phone, "placed");
   return {
     ok: true as const,
     order: {
@@ -366,5 +431,7 @@ export async function updateNativeOrderStatus(orderId: string, request: Request,
     "insert into native_order_events (id, order_id, from_status, to_status, note, actor) values ($1,$2,$3,$4,$5,'operations')",
     [randomUUID(), orderId, current[0].status, status, note],
   );
-  return { ok: true as const, orderId, status, notification: "Status is saved. SMS status-template delivery must be enabled separately." };
+  const recipient = await sql.query<{ phone: string }>("select customer_phone as phone from native_orders where id = $1", [orderId]);
+  if (recipient[0]) await dispatchOrderStatusSms(sql, orderId, recipient[0].phone, status);
+  return { ok: true as const, orderId, status, notification: "Status saved. SMS submission is recorded in the notification outbox." };
 }
