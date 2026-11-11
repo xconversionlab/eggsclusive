@@ -208,6 +208,7 @@ private fun SpencersApp() {
     var showTopUp by remember { mutableStateOf(false) }
     var showMap by remember { mutableStateOf(false) }
     var showSplash by rememberSaveable { mutableStateOf(true) }
+    var placingOrder by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         delay(950)
@@ -246,48 +247,86 @@ private fun SpencersApp() {
         saveWallet(prefs, walletEntries)
     }
     fun placeOrder() {
-        if (!profile.isReady) {
+        if (placingOrder) return
+        if (!profile.isReady || sessionToken.isBlank()) {
             tab = MainTab.Profile
-            scope.launch { snackbar.showSnackbar("Complete your profile, verify your demo phone number and add a delivery address first.") }
+            scope.launch { snackbar.showSnackbar("Complete your verified mobile profile and delivery address first.") }
             return
         }
         val partner = servingPartner(profile)
         if (partner == null) {
             tab = MainTab.Profile
-            scope.launch { snackbar.showSnackbar("Delivery is not available at this map location yet. Choose another location.") }
+            scope.launch { snackbar.showSnackbar("Delivery is not available at this map location yet.") }
             return
         }
         if (quantity > partner.stockEggs) {
             scope.launch { snackbar.showSnackbar("Only ${partner.stockEggs} eggs are currently available from ${partner.shopName}.") }
             return
         }
-        val total = quantity * partner.pricePerEggPaise
-        if (payment == "Wallet" && walletBalance < total) {
+        val estimatedTotal = quantity * partner.pricePerEggPaise
+        if (payment == "Wallet" && walletBalance < estimatedTotal) {
             tab = MainTab.Status
             historyPage = "wallet"
             scope.launch { snackbar.showSnackbar("Your wallet balance is not enough. Choose UPI demo or add demo wallet funds.") }
             return
         }
-        val now = System.currentTimeMillis()
-        val orderId = "SP-" + SimpleDateFormat("yyMMdd-HHmmss", Locale.US).format(Date(now))
-        val otp = (100000 + SecureRandom().nextInt(900000)).toString()
-        val placed = CustomerOrder(
-            id = orderId, createdAt = now, quantity = quantity, slot = "",
-            payment = payment, totalPaise = total, status = "Order placed",
-            partnerName = partner.riderName, partnerPhone = partner.phone, deliveryOtp = otp,
-            addressLabel = profile.addressLabel, deliveryAddress = profile.address,
-        )
-        orders = listOf(placed) + orders
-        saveOrders(prefs, orders)
-        if (payment == "Wallet") {
-            val next = walletBalance - total
-            updateWallet(next, WalletTransaction("TX-" + orderId, now, "Payment for " + orderId, -total, next))
+
+        placingOrder = true
+        scope.launch {
+            try {
+                val addressJson = JSONObject()
+                    .put("label", profile.addressLabel)
+                    .put("door", profile.door)
+                    .put("street", profile.street)
+                    .put("area", profile.area)
+                    .put("landmark", profile.landmark)
+                    .put("city", profile.city)
+                    .put("pincode", profile.pincode)
+                    .put("latitude", profile.latitude)
+                    .put("longitude", profile.longitude)
+                val requestBody = JSONObject()
+                    .put("quantity", quantity)
+                    .put("payment", payment)
+                    .put("address", addressJson)
+                val response = withContext(Dispatchers.IO) {
+                    nativeApiRequest("/api/native/orders", "POST", requestBody, sessionToken)
+                }
+                val remote = response.optJSONObject("order")
+                    ?: throw IllegalStateException("The server did not return the placed order.")
+                val orderId = remote.optString("id")
+                val total = remote.optInt("totalPaise", estimatedTotal)
+                val now = System.currentTimeMillis()
+                val placed = CustomerOrder(
+                    id = orderId,
+                    createdAt = now,
+                    quantity = remote.optInt("quantity", quantity),
+                    slot = "",
+                    payment = remote.optString("payment", payment),
+                    totalPaise = total,
+                    status = "Order placed",
+                    partnerName = remote.optString("partnerName"),
+                    partnerPhone = remote.optString("partnerPhone"),
+                    deliveryOtp = remote.optString("deliveryOtp"),
+                    addressLabel = remote.optString("addressLabel", profile.addressLabel),
+                    deliveryAddress = remote.optString("deliveryAddress", profile.address),
+                )
+                orders = listOf(placed) + orders.filterNot { it.id == orderId }
+                saveOrders(prefs, orders)
+                if (payment == "Wallet") {
+                    val next = walletBalance - total
+                    updateWallet(next, WalletTransaction("TX-" + orderId, now, "Payment for " + orderId, -total, next))
+                }
+                quantity = 12
+                payment = "UPI · demo"
+                tab = MainTab.Status
+                historyPage = "orders"
+                snackbar.showSnackbar("Order " + orderId + " placed. Your order is now saved to your account.")
+            } catch (error: Exception) {
+                snackbar.showSnackbar(error.message ?: "Could not place the order. Please try again.")
+            } finally {
+                placingOrder = false
+            }
         }
-        quantity = 12
-        payment = "UPI · demo"
-        tab = MainTab.Status
-        historyPage = "orders"
-        scope.launch { snackbar.showSnackbar("Order " + orderId + " placed. Check Status for your delivery OTP and assigned partner.") }
     }
 
     if (showSplash) {
