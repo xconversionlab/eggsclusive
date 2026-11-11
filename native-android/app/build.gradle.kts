@@ -14,9 +14,10 @@ android {
         targetSdk = 35
         versionCode = 2
         versionName = "1.0.0"
+        buildConfigField("String", "API_BASE_URL", "\"https://eggsclusive-preview.vercel.app\"")
     }
 
-    buildFeatures { compose = true }
+    buildFeatures { compose = true; buildConfig = true }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
