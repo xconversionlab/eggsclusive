@@ -3,6 +3,7 @@ import {
   apiJson,
   createNativeOrder,
   listNativeOrders,
+  listOperationsNativeOrders,
   requestPhoneOtp,
   updateNativeOrderStatus,
   verifyPhoneOtp,
@@ -24,6 +25,10 @@ export const Route = createFileRoute("/api/native/$")({
           }
           if (pathname === "/api/native/orders") {
             const result = await listNativeOrders(request);
+            return result.ok ? apiJson(result) : apiJson({ ok: false, error: result.error }, result.status);
+          }
+          if (pathname === "/api/native/ops/orders") {
+            const result = await listOperationsNativeOrders(request);
             return result.ok ? apiJson(result) : apiJson({ ok: false, error: result.error }, result.status);
           }
           return apiJson({ ok: false, error: "Not found." }, 404);
