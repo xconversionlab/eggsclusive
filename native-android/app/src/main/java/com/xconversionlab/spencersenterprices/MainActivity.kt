@@ -198,6 +198,7 @@ private fun SpencersApp() {
     var tab by rememberSaveable { mutableStateOf(MainTab.Order) }
     var historyPage by rememberSaveable { mutableStateOf("orders") }
     var profile by remember { mutableStateOf(loadProfile(prefs)) }
+    var sessionToken by remember { mutableStateOf(prefs.getString("native_session_token", "").orEmpty()) }
     var orders by remember { mutableStateOf(loadOrders(prefs)) }
     var walletBalance by remember { mutableIntStateOf(prefs.getInt("wallet_balance", 0)) }
     var walletEntries by remember { mutableStateOf(loadWallet(prefs)) }
@@ -307,16 +308,89 @@ private fun SpencersApp() {
         return
     }
 
-    if (!profile.phoneVerified) {
+    if (!profile.phoneVerified || sessionToken.isBlank()) {
         LoginScreen(
+            onRequestOtp = { phone ->
+                withContext(Dispatchers.IO) {
+                    val result = nativeApiRequest(
+                        "/api/native/auth/request-otp",
+                        "POST",
+                        JSONObject().put("phone", phone),
+                    )
+                    result.optString("message", "OTP sent.")
+                }
+            },
             onVerify = { name, phone, code ->
-                if (code == "482913") {
+                withContext(Dispatchers.IO) {
+                    val result = nativeApiRequest(
+                        "/api/native/auth/verify-otp",
+                        "POST",
+                        JSONObject().put("name", name).put("phone", phone).put("code", code),
+                    )
+                    val token = result.optString("token")
+                    if (token.isBlank()) throw IllegalStateException("Login could not be completed.")
+                    sessionToken = token
+                    prefs.edit().putString("native_session_token", token).apply()
                     saveProfile(profile.copy(name = name.trim(), phone = phone, phoneVerified = true))
                     true
-                } else false
+                }
             },
         )
         return
+    }
+
+    LaunchedEffect(tab, sessionToken) {
+        if (tab == MainTab.Status && sessionToken.isNotBlank()) {
+            while (true) {
+                try {
+                    val result = withContext(Dispatchers.IO) {
+                        nativeApiRequest("/api/native/orders", "GET", bearerToken = sessionToken)
+                    }
+                    val remoteOrders = result.optJSONArray("orders") ?: JSONArray()
+                    val synced = (0 until remoteOrders.length()).mapNotNull { index ->
+                        val item = remoteOrders.optJSONObject(index) ?: return@mapNotNull null
+                        val rawStatus = item.optString("status")
+                        val displayStatus = when (rawStatus) {
+                            "placed" -> "Order placed"
+                            "accepted" -> "Partner allocated"
+                            "preparing" -> "Preparing"
+                            "out_for_delivery" -> "Out for delivery"
+                            "delivered" -> "Delivered"
+                            "cancelled" -> "Cancelled"
+                            else -> rawStatus
+                        }
+                        CustomerOrder(
+                            id = item.optString("id"),
+                            createdAt = item.optLong("createdAt"),
+                            quantity = item.optInt("quantity"),
+                            slot = "",
+                            payment = item.optString("payment"),
+                            totalPaise = item.optInt("totalPaise"),
+                            status = displayStatus,
+                            partnerName = item.optString("partnerName"),
+                            partnerPhone = item.optString("partnerPhone"),
+                            deliveryOtp = item.optString("deliveryOtp"),
+                            addressLabel = item.optString("addressLabel"),
+                            deliveryAddress = item.optString("deliveryAddress"),
+                        )
+                    }
+                    orders = synced
+                    saveOrders(prefs, synced)
+                } catch (error: Exception) {
+                    val message = error.message.orEmpty()
+                    if (message.contains("log in again", ignoreCase = true) ||
+                        message.contains("authorization", ignoreCase = true)) {
+                        sessionToken = ""
+                        prefs.edit().remove("native_session_token").apply()
+                        profile = profile.copy(phoneVerified = false)
+                        prefs.edit().putBoolean("profile_phone_verified", false).apply()
+                        snackbar.showSnackbar("Your session expired. Please verify your mobile number again.")
+                        break
+                    }
+                }
+                delay(20000)
+            }
+        }
     }
 
     if (showMap) {
