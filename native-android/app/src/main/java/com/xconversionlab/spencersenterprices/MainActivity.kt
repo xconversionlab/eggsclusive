@@ -1073,11 +1073,18 @@ private fun ProfileScreen(
 }
 
 @Composable
-private fun LoginScreen(onVerify: (String, String, String) -> Boolean) {
+private fun LoginScreen(
+    onRequestOtp: suspend (String) -> String,
+    onVerify: suspend (String, String, String) -> Boolean,
+) {
+    val scope = rememberCoroutineScope()
     var name by rememberSaveable { mutableStateOf("") }
     var phone by rememberSaveable { mutableStateOf("") }
     var otp by rememberSaveable { mutableStateOf("") }
     var requested by rememberSaveable { mutableStateOf(false) }
+    var sending by rememberSaveable { mutableStateOf(false) }
+    var verifying by rememberSaveable { mutableStateOf(false) }
+    var successMessage by rememberSaveable { mutableStateOf("") }
     var error by rememberSaveable { mutableStateOf("") }
     Column(
         Modifier.fillMaxSize().background(Paper).verticalScroll(rememberScrollState()).padding(24.dp),
@@ -1091,34 +1098,71 @@ private fun LoginScreen(onVerify: (String, String, String) -> Boolean) {
             contentScale = ContentScale.Fit,
         )
         Text("Login to continue", color = Navy, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
-        Text("Mobile verification is required before ordering.", color = Muted, fontSize = 12.sp)
+        Text("Enter your mobile number. We will send a one-time password by SMS.", color = Muted, fontSize = 12.sp)
         Spacer(Modifier.height(18.dp))
         AppTextField("Your name", name, { name = it })
         Spacer(Modifier.height(9.dp))
-        AppTextField("10-digit mobile number", phone, { phone = it.filter(Char::isDigit).take(10) }, KeyboardType.Phone)
+        AppTextField("10-digit mobile number", phone, {
+            phone = it.filter(Char::isDigit).take(10)
+            requested = false
+            otp = ""
+            successMessage = ""
+            error = ""
+        }, KeyboardType.Phone)
         if (!requested) {
             Button(
-                onClick = { requested = true; error = "" },
-                enabled = name.isNotBlank() && phone.length == 10,
+                onClick = {
+                    scope.launch {
+                        sending = true
+                        error = ""
+                        successMessage = ""
+                        try {
+                            successMessage = onRequestOtp(phone)
+                            requested = true
+                        } catch (e: Exception) {
+                            error = e.message ?: "Could not send OTP. Please try again."
+                        } finally {
+                            sending = false
+                        }
+                    }
+                },
+                enabled = name.isNotBlank() && phone.length == 10 && !sending,
                 modifier = Modifier.fillMaxWidth().padding(top = 12.dp).height(52.dp),
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Navy),
-            ) { Text("Request OTP") }
+            ) {
+                Text(if (sending) "Sending OTP…" else "Send OTP")
+            }
         } else {
-            Text("Demo OTP: 482913 · no SMS is sent in this build.", color = Color(0xFF9A3412), fontSize = 11.sp, modifier = Modifier.padding(top = 10.dp))
-            Spacer(Modifier.height(8.dp))
-            AppTextField("Enter 6-digit OTP", otp, { otp = it.filter(Char::isDigit).take(6) }, KeyboardType.Number)
+            Text("OTP sent to +91 $phone. It expires in 5 minutes.", color = Green, fontSize = 11.sp,
+                modifier = Modifier.padding(top = 10.dp), fontWeight = FontWeight.SemiBold)
+            AppTextField("Enter 6-digit OTP", otp, { otp = it.filter(Char::isDigit).take(6); error = "" }, KeyboardType.Number)
             Button(
                 onClick = {
-                    if (!onVerify(name, phone, otp)) error = "Incorrect code. Enter the demo OTP shown above."
+                    scope.launch {
+                        verifying = true
+                        error = ""
+                        try {
+                            onVerify(name, phone, otp)
+                        } catch (e: Exception) {
+                            error = e.message ?: "OTP verification failed. Please try again."
+                        } finally {
+                            verifying = false
+                        }
+                    }
                 },
-                enabled = otp.length == 6,
+                enabled = otp.length == 6 && !verifying,
                 modifier = Modifier.fillMaxWidth().padding(top = 10.dp).height(52.dp),
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Navy),
-            ) { Text("Verify and login") }
+            ) { Text(if (verifying) "Verifying…" else "Verify and login") }
+            TextButton(onClick = { requested = false; otp = ""; error = ""; successMessage = "" }, enabled = !verifying) {
+                Text("Change number / resend")
+            }
         }
         if (error.isNotBlank()) Text(error, color = Color(0xFFB91C1C), fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp))
+        Text("Your mobile number is used for sign-in and order updates.", color = Muted, fontSize = 10.sp, lineHeight = 15.sp,
+            modifier = Modifier.padding(top = 12.dp))
     }
 }
 
