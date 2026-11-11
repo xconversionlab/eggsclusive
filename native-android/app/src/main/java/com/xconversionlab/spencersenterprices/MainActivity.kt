@@ -257,7 +257,7 @@ private fun SpencersApp() {
             return
         }
         if (quantity > partner.stockEggs) {
-            scope.launch { snackbar.showSnackbar("Only ${partner.stockEggs} eggs are currently available from ${partner.name}.") }
+            scope.launch { snackbar.showSnackbar("Only ${partner.stockEggs} eggs are currently available from ${partner.shopName}.") }
             return
         }
         val total = quantity * partner.pricePerEggPaise
