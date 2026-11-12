@@ -9,13 +9,13 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Eggsclusive — Chennai street eggs" },
+      { title: "Spencers Enterprises — Deliver your Home Needs" },
       {
         name: "description",
         content:
-          "Neighbourhood egg delivery in Chennai. Matched to your street, not a pin-code guess.",
+          "Order fresh eggs and drinking water from Spencers Enterprises.",
       },
-      { name: "theme-color", content: "#1c1915" },
+      { name: "theme-color", content: "#0b5e96" },
     ],
     links: [
       { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
