@@ -35,6 +35,9 @@ export function Onboarding() {
   const [door, setDoor] = useState(address?.door ?? "");
   const [apartment, setApartment] = useState(address?.apartment ?? "");
   const [landmark, setLandmark] = useState(address?.landmark ?? "");
+  const [addressLabel, setAddressLabel] = useState(address?.label ?? "Home");
+  const [cityName, setCityName] = useState(address?.cityName ?? "Chennai");
+  const [pin, setPin] = useState(address?.pin ?? "");
 
   const matches = useMemo(
     () => searchStreets(streets, localities, query, localityId).slice(0, 8),
@@ -210,6 +213,11 @@ export function Onboarding() {
             <Field placeholder={t(bi("Apartment", "அபார்ட்மெண்ட்"))} value={apartment} onChange={(e) => setApartment(e.target.value)} />
           </div>
           <Field placeholder={t(bi("Landmark", "அடையாளம்"))} value={landmark} onChange={(e) => setLandmark(e.target.value)} />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field placeholder={t(bi("Address name · Home / Work", "முகவரி பெயர் · வீடு / வேலை"))} value={addressLabel} onChange={(e) => setAddressLabel(e.target.value)} />
+            <Field placeholder={t(bi("City", "நகரம்"))} value={cityName} onChange={(e) => setCityName(e.target.value)} />
+            <Field placeholder={t(bi("PIN code", "அஞ்சல் குறியீடு"))} inputMode="numeric" maxLength={6} value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))} />
+          </div>
           <ServiceCard />
           <div className="flex gap-2">
             <Button variant="line" onClick={() => setStep(2)}>
@@ -221,12 +229,14 @@ export function Onboarding() {
               onClick={() => {
                 const next: Address = {
                   city: "chennai",
+                  cityName: cityName.trim() || "Chennai",
+                  label: addressLabel.trim() || "Home",
                   localityId: street.localityId,
                   streetId: street.id,
                   door: door.trim(),
                   apartment: apartment.trim(),
                   landmark: landmark.trim(),
-                  pin: street.pin,
+                  pin: pin.trim() || street.pin,
                   confirmed: true,
                 };
                 confirmAddress(next);
