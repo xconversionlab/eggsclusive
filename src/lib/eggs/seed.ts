@@ -123,6 +123,7 @@ const STREETS: Street[] = [
 
 export const DEFAULT_PRICE: Record<string, number> = {
   white: 700,
+  "water-can": 3000,
   brown: 900,
   country: 1400,
   quail: 500,
@@ -132,7 +133,8 @@ export const DEFAULT_PRICE: Record<string, number> = {
 };
 
 const PRODUCTS: Product[] = [
-  { id: "white", name: bi("White eggs", "வெள்ளை முட்டை"), blurb: bi("The everyday dozen from a partner farm.", "தினசரி வெள்ளை முட்டை. பங்காளிப் பண்ணை."), packs: [1, 6, 12, 15, 30, 210], active: true },
+  { id: "white", name: bi("Fresh Egg", "புதிய முட்டை"), blurb: bi("", ""), packs: [1], active: true },
+  { id: "water-can", name: bi("Water Can", "தண்ணீர் கேன்"), blurb: bi("Fresh drinking water", "குடிநீர்"), packs: [1], active: true },
   { id: "brown", name: bi("Brown eggs", "பழுப்பு முட்டை"), blurb: bi("Brown shell, same careful pack.", "பழுப்பு ஓடு. அதே கவனமான பொதி."), packs: [6, 12, 15, 30], active: true },
   { id: "country", name: bi("Country eggs", "நாட்டுக்கோழி முட்டை"), blurb: bi("Naatu kozhi muttai. Smaller, deeper yolk.", "நாட்டுக்கோழி முட்டை. சிறியது, ஆழமான மஞ்சள்."), packs: [6, 12, 15, 30], active: true },
   { id: "quail", name: bi("Quail eggs", "காடை முட்டை"), blurb: bi("Speckled, sold by the half-dozen and up.", "புள்ளிகள். அரை டஜன் முதல்."), packs: [6, 12, 30], active: true },
@@ -231,14 +233,14 @@ const VROWS: VendorProduct[] = [
   stockRow("v-murugan", "freerange", 1600, 48, 18),
   stockRow("v-murugan", "protein", 1200, 110, 24),
   stockRow("v-lakshmi", "country", 1500, 280, 40, { en: "This morning · backyard collective", ta: "இன்று காலை · வீட்டுப் பண்ணை" }),
-  stockRow("v-lakshmi", "white", 750, 40, 20),
+  stockRow("v-lakshmi", "white", 700, 40, 20),
   stockRow("v-lakshmi", "brown", 950, 36, 16),
   stockRow("v-lakshmi", "freerange", 1700, 60, 20),
-  stockRow("v-anna", "white", 650, 640, 80),
+  stockRow("v-anna", "white", 700, 640, 80),
   stockRow("v-anna", "brown", 850, 200, 40),
   stockRow("v-anna", "protein", 1100, 260, 40),
   stockRow("v-anna", "country", 1350, 70, 20),
-  stockRow("v-sun", "white", 720, 180, 40),
+  stockRow("v-sun", "white", 700, 180, 40),
   stockRow("v-sun", "brown", 920, 8, 20),
   stockRow("v-sun", "duck", 1700, 40, 10),
   stockRow("v-sun", "quail", 480, 90, 24),
@@ -246,6 +248,10 @@ const VROWS: VendorProduct[] = [
   stockRow("v-pondy", "white", 680, 0, 40),
   stockRow("v-pondy", "protein", 1150, 0, 20),
   stockRow("v-old", "white", 700, 20, 10),
+  stockRow("v-murugan", "water-can", 3000, 500, 20),
+  stockRow("v-lakshmi", "water-can", 3000, 500, 20),
+  stockRow("v-anna", "water-can", 3000, 500, 20),
+  stockRow("v-sun", "water-can", 3000, 500, 20),
 ];
 
 const SLOTS: Slot[] = [
