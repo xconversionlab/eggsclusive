@@ -25,6 +25,7 @@ export type Session = {
   lang: Lang;
   profile: Profile;
   address: Address | null;
+  savedAddresses: Address[];
   editingStreet: boolean;
   cart: CartLine[];
   cartVendorId: string | null;
@@ -44,6 +45,9 @@ export type EggsState = Catalogue &
     verifyPhone: (phone: string, name: string) => void;
     setAccount: (accountType: AccountType, businessName: string, name: string) => void;
     confirmAddress: (address: Address) => void;
+    saveAddress: (address: Address) => void;
+    selectAddress: (id: string) => void;
+    removeAddress: (id: string) => void;
     setEditingStreet: (on: boolean) => void;
     setActiveVendor: (id: string) => void;
     setCartVendor: (id: string) => void;
@@ -51,7 +55,7 @@ export type EggsState = Catalogue &
     setLineQty: (productId: string, pack: number, qtyPacks: number) => void;
     clearCart: () => void;
     setCoupon: (code: string) => void;
-    placeOrder: (input: { slotId: string; date: string; method: PayMethod; useWallet: boolean }) => string | null;
+    placeOrder: (input: { slotId: string; date: string; method: PayMethod; useWallet: boolean; bottleDepositPaise?: number }) => string | null;
     cancelOrder: (orderId: string) => void;
     confirmCancel: (orderId: string) => void;
     vendorAdvance: (orderId: string, status: OrderStatus, cashCollected?: boolean) => void;
@@ -101,6 +105,7 @@ function session(): Session {
     lang: "en",
     profile: { name: "Meenakshi R.", phone: "", phoneVerified: false, accountType: "home", businessName: "" },
     address: null,
+    savedAddresses: [],
     editingStreet: false,
     cart: [],
     cartVendorId: null,
@@ -173,6 +178,7 @@ export const useEggs = create<EggsState>()(
       setAccount: (accountType, businessName, name) =>
         set({ profile: { ...get().profile, accountType, businessName, name: name.trim() || get().profile.name } }),
       confirmAddress: (address) => {
+        const savedAddress: Address = { ...address, id: address.id ?? nid("addr"), label: address.label?.trim() || "Home", cityName: address.cityName?.trim() || "Chennai" };
         const decision = rankVendors({
           streetId: address.streetId,
           streets: get().streets,
@@ -184,7 +190,8 @@ export const useEggs = create<EggsState>()(
           clock: readChennai(),
         });
         set({
-          address,
+          address: savedAddress,
+          savedAddresses: [...get().savedAddresses.filter((row) => row.id !== savedAddress.id), savedAddress].slice(-4),
           editingStreet: false,
           cart: [],
           cartVendorId: decision.recommendedId ?? null,
@@ -192,6 +199,33 @@ export const useEggs = create<EggsState>()(
             ? say(bi("Street saved. Prices are from the shop on this street.", "தெரு சேமிக்கப்பட்டது. விலை இந்தத் தெருக் கடையிலிருந்து."))
             : say(bi("Street saved. It is not in service yet.", "தெரு சேமிக்கப்பட்டது. இன்னும் சேவையில் இல்லை.")),
         });
+      },
+      saveAddress: (address) => {
+        const s = get();
+        const saved: Address = { ...address, id: address.id ?? nid("addr"), label: address.label?.trim() || "Home", cityName: address.cityName?.trim() || address.city };
+        const next = [...s.savedAddresses.filter((row) => row.id !== saved.id), saved].slice(-4);
+        set({ savedAddresses: next, flash: say(bi("Address saved.", "முகவரி சேமிக்கப்பட்டது.")) });
+      },
+      selectAddress: (id) => {
+        const s = get();
+        const address = s.savedAddresses.find((row) => row.id === id);
+        if (!address) return;
+        const decision = rankVendors({
+          streetId: address.streetId,
+          streets: s.streets,
+          vendors: s.vendors,
+          assignments: s.assignments,
+          vendorProducts: s.vendorProducts,
+          capacities: s.capacities,
+          slots: s.slots,
+          clock: readChennai(),
+        });
+        set({ address, cart: [], cartVendorId: decision.recommendedId ?? null, flash: say(bi("Delivery address selected.", "டெலிவரி முகவரி தேர்ந்தெடுக்கப்பட்டது.")) });
+      },
+      removeAddress: (id) => {
+        const s = get();
+        const next = s.savedAddresses.filter((row) => row.id !== id);
+        set({ savedAddresses: next, address: s.address?.id === id ? (next[0] ?? null) : s.address });
       },
       setEditingStreet: (editingStreet) => set({ editingStreet }),
       setActiveVendor: (activeVendorId) => set({ activeVendorId }),
@@ -301,12 +335,14 @@ export const useEggs = create<EggsState>()(
           priorOrders: prior,
         });
         if (quote.missing || quote.total < 0) return null;
+        const bottleDepositPaise = Math.max(0, Math.round(input.bottleDepositPaise ?? 0));
+        const orderTotal = quote.total + bottleDepositPaise;
         let walletOff = 0;
-        if (useWallet && s.config.walletEnabled) walletOff = Math.min(s.walletPaise, quote.total);
-        const due = quote.total - walletOff;
+        if (useWallet && s.config.walletEnabled) walletOff = Math.min(s.walletPaise, orderTotal);
+        const due = orderTotal - walletOff;
         if (method === "upi" && !s.config.upiEnabled) return null;
         if (method === "cod" && due > 0 && !s.config.codEnabled) return null;
-        const captured = method === "upi" ? quote.total : walletOff;
+        const captured = method === "upi" ? orderTotal : walletOff;
         const payMethod: PayMethod = due === 0 ? "wallet" : method;
         const lines = s.cart.map((line) => {
           const row = s.vendorProducts.find((p) => p.vendorId === s.cartVendorId && p.productId === line.productId);
@@ -328,8 +364,10 @@ export const useEggs = create<EggsState>()(
           date,
           method: payMethod,
           capturedPaise: captured,
-          totalPaise: quote.total,
+          totalPaise: orderTotal,
           discountPaise: quote.trade + quote.couponOff,
+          bottleDepositPaise,
+          deliveryOtp: String(Math.floor(100000 + Math.random() * 900000)),
           status: "placed",
           coupon: coupon && quote.couponOff > 0 ? coupon.code : null,
           createdAt: new Date().toISOString(),
