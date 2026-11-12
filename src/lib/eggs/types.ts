@@ -115,7 +115,10 @@ export type Offer = {
 };
 
 export type Address = {
-  city: "chennai";
+  id?: string;
+  label?: string;
+  city: string;
+  cityName?: string;
   localityId: string;
   streetId: string;
   door: string;
@@ -165,6 +168,10 @@ export type Order = {
   subscriptionId?: string;
   rating?: number;
   settled: boolean;
+  bottleDepositPaise?: number;
+  deliveryOtp?: string;
+  deliveryPartnerName?: string;
+  deliveryPartnerPhone?: string;
   cashPending?: boolean;
   cancelRequested?: boolean;
   events: OrderEvent[];
