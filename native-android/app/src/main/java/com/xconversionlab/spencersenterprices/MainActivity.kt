@@ -468,7 +468,7 @@ private fun SpencersApp() {
         bottomBar = {
             NavigationBar(containerColor = Color.White, tonalElevation = 10.dp) {
                 NavigationBarItem(tab == MainTab.Order, { tab = MainTab.Order }, icon = { Icon(Icons.Filled.ShoppingBasket, null) }, label = { Text("Order") })
-                NavigationBarItem(tab == MainTab.Status, { tab = MainTab.Status }, icon = { Icon(Icons.Filled.History, null) }, label = { Text("Status", maxLines = 1) })
+                NavigationBarItem(tab == MainTab.Status, { tab = MainTab.Status }, icon = { Icon(Icons.Filled.History, null) }, label = { Text("Activity", maxLines = 1) })
                 NavigationBarItem(tab == MainTab.Profile, { tab = MainTab.Profile }, icon = { Icon(Icons.Filled.Person, null) }, label = { Text("Profile") })
             }
         },
@@ -1077,7 +1077,7 @@ private fun ProfileScreen(
         Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(22.dp), modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("Complaint / Support", color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 15.sp)
-                Text("Describe your issue. Submit opens your share sheet so you can send it through email or WhatsApp.", color = Muted, fontSize = 11.sp, lineHeight = 16.sp)
+                Text("Describe your issue and submit it to the Spencer’s Enterprises support desk.", color = Muted, fontSize = 11.sp, lineHeight = 16.sp)
                 OutlinedTextField(
                     value = complaint,
                     onValueChange = { complaint = it },
@@ -1094,7 +1094,7 @@ private fun ProfileScreen(
                     shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Navy),
                 ) { Text("Submit complaint") }
-                Text("A local ticket reference is saved on this phone. It reaches the support team only after you choose and send it from an email or messaging app.", color = Muted, fontSize = 10.sp, lineHeight = 15.sp)
+                Text("Your complaint is saved as a support ticket for the operations team.", color = Muted, fontSize = 10.sp, lineHeight = 15.sp)
             }
         }
         Spacer(Modifier.height(8.dp))
@@ -1163,8 +1163,8 @@ private fun LoginScreen(
             modifier = Modifier.width(240.dp).height(190.dp),
             contentScale = ContentScale.Fit,
         )
-        Text("Login to continue", color = Navy, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
-        Text("Enter your mobile number. We will send a one-time password by SMS.", color = Muted, fontSize = 12.sp)
+        Text("Eggsclusive", color = Navy, fontSize = 27.sp, fontWeight = FontWeight.ExtraBold)
+        Text("Spencer’s Enterprises · Enter your mobile number for a secure SMS OTP.", color = Muted, fontSize = 12.sp)
         Spacer(Modifier.height(18.dp))
         AppTextField("Your name", name, { name = it })
         Spacer(Modifier.height(9.dp))
@@ -1375,6 +1375,9 @@ private fun loadOrders(prefs: SharedPreferences): List<CustomerOrder> = try {
             addressLabel = item.optString("addressLabel"),
             deliveryAddress = item.optString("deliveryAddress"),
             refundApplied = item.optBoolean("refundApplied", false),
+            productType = item.optString("productType", "egg"),
+            bottleDepositPaise = item.optInt("bottleDepositPaise", 0),
+            floorCount = item.optInt("floorCount", 0),
         )
     }.sortedByDescending { it.createdAt }
 } catch (_: Exception) { emptyList() }
@@ -1388,6 +1391,8 @@ private fun saveOrders(prefs: SharedPreferences, orders: List<CustomerOrder>) {
             put("status", order.status); put("partnerName", order.partnerName); put("partnerPhone", order.partnerPhone)
             put("deliveryOtp", order.deliveryOtp); put("addressLabel", order.addressLabel)
             put("deliveryAddress", order.deliveryAddress); put("refundApplied", order.refundApplied)
+            put("productType", order.productType); put("bottleDepositPaise", order.bottleDepositPaise)
+            put("floorCount", order.floorCount)
         })
     }
     prefs.edit().putString("orders", array.toString()).apply()
