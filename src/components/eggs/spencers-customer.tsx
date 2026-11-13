@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Activity, ArrowRight, Check, ClipboardList, Droplets, Egg, Handshake,
   House, LogOut, MapPin, Milk, Minus, Package, Plus, RefreshCw, ShieldCheck,
@@ -335,6 +335,8 @@ export function SpencersCustomerApp() {
     );
   }
 
+  if (!activeAddress) return null;
+
   return (
     <div className="min-h-screen bg-customer pb-24 text-customer-ink">
       <header className="mx-auto flex max-w-xl items-center justify-between px-4 pb-3 pt-4">
@@ -471,7 +473,7 @@ export function SpencersCustomerApp() {
   );
 }
 
-function EmptyState({ icon, title, detail }: { icon: React.ReactNode; title: string; detail: string }) {
+function EmptyState({ icon, title, detail }: { icon: ReactNode; title: string; detail: string }) {
   return <div className="rounded-2xl border border-dashed border-customer-line bg-white px-5 py-8 text-center"><div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-brand-pale text-brand">{icon}</div><h3 className="mt-3 font-semibold">{title}</h3><p className="mt-1 text-sm text-customer-muted">{detail}</p></div>;
 }
 
