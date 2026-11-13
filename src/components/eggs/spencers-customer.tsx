@@ -44,6 +44,7 @@ const STATUS: Record<OrderStatus, string> = {
   placed: "Order placed", accepted: "Order accepted", preparing: "Preparing your order",
   out_for_delivery: "Out for delivery", delivered: "Order delivered", cancelled: "Order cancelled",
 };
+const STATUS_STEPS: OrderStatus[] = ["placed", "accepted", "preparing", "out_for_delivery", "delivered"];
 const money = (paise: number) => new Intl.NumberFormat("en-IN", {
   style: "currency", currency: "INR", maximumFractionDigits: paise % 100 === 0 ? 0 : 2,
 }).format(paise / 100);
@@ -424,15 +425,31 @@ export function SpencersCustomerApp() {
                 <div className="flex items-start justify-between gap-3"><div><p className="text-xs text-customer-muted">{order.id} · {dateLabel(order.createdAt)}</p><h3 className="mt-1 font-bold">{STATUS[order.status]}</h3></div><span className="rounded-full bg-brand-pale px-3 py-1 text-xs font-semibold text-brand-dark">{order.status === "delivered" ? "Completed" : order.status === "cancelled" ? "Cancelled" : "In progress"}</span></div>
                 <p className="mt-3 text-sm text-customer-muted">{order.lines.map((line) => line.name + " × " + line.quantity).join(" · ")}</p>
                 <div className="mt-3 rounded-xl bg-customer p-3">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-brand-dark"><Package size={17} />Order placed</div>
-                  <div className="ml-2 mt-2 border-l-2 border-customer-line pl-4 text-sm">
-                    <p className={order.status !== "placed" ? "font-medium text-brand-dark" : "text-customer-muted"}>Order accepted and preparation updates will appear here.</p>
-                    <p className="mt-2 text-customer-muted">Delivery partner: {order.partnerName ? order.partnerName + (order.partnerPhone ? " · " + order.partnerPhone : "") : "Awaiting allocation by Spencer's team"}</p>
+                  {order.status === "cancelled" || order.status === "rejected" ? (
+                    <p className="flex items-center gap-2 text-sm font-semibold text-red-700"><X size={17} />{STATUS[order.status]}</p>
+                  ) : (
+                    <ol className="space-y-3">
+                      {STATUS_STEPS.map((step, index) => {
+                        const current = STATUS_STEPS.indexOf(order.status);
+                        const complete = index <= current;
+                        return (
+                          <li key={step} className="flex items-center gap-3 text-sm">
+                            <span className={"grid h-6 w-6 shrink-0 place-items-center rounded-full " + (complete ? "bg-brand text-white" : "border border-customer-line bg-white text-customer-muted")}>
+                              {complete ? <Check size={13} /> : index + 1}
+                            </span>
+                            <span className={complete ? "font-semibold text-brand-dark" : "text-customer-muted"}>{STATUS[step]}</span>
+                          </li>
+                        );
+                      })}
+                    </ol>
+                  )}
+                  <div className="mt-3 border-t border-customer-line pt-3 text-sm">
+                    <p className="text-customer-muted">Delivery partner: {order.partnerName ? order.partnerName + (order.partnerPhone ? " · " + order.partnerPhone : "") : "Awaiting allocation by Spencer's team"}</p>
                     <p className="mt-2 text-customer-muted">Delivery OTP: {order.status === "out_for_delivery" || order.status === "delivered" ? order.deliveryOtp : "Shown when the order is out for delivery"}</p>
                   </div>
                 </div>
-                <div className="mt-3 flex items-center justify-between border-t border-customer-line pt-3"><span className="text-sm text-customer-muted">{order.awaitingQuote ? "Price confirmation pending" : "Order total"}</span><strong className="text-brand-dark">{money(order.totalPaise)}</strong></div>
-                {order.status === "cancelled" ? <p className="mt-2 rounded-lg bg-emerald-50 p-2 text-sm text-emerald-800">Cancelled by Spencer's team. {money(order.refundPaise ?? order.totalPaise)} credited to your wallet.</p> : <p className="mt-2 text-[11px] text-customer-muted">Only Spencer's team can cancel an order. Any eligible cancellation refund is credited to your wallet.</p>}
+                <div className="mt-3 flex items-center justify-between border-t border-customer-line pt-3"><span className="text-sm text-customer-muted">{order.awaitingQuote ? "Known total · milk / curd price pending" : "Order total"}</span><strong className="text-brand-dark">{money(order.totalPaise)}</strong></div>
+                {order.status === "cancelled" ? <p className="mt-2 rounded-lg bg-emerald-50 p-2 text-sm text-emerald-800">Cancelled by Spencer's team. {money(order.refundPaise ?? order.totalPaise)} credited to your wallet.</p> : order.status === "rejected" ? <p className="mt-2 rounded-lg bg-amber-50 p-2 text-sm text-amber-900">The order was declined by Spencer's team. Contact support about the refund.</p> : <p className="mt-2 text-[11px] text-customer-muted">Only Spencer's team can cancel an order. Any eligible cancellation refund is credited to your wallet.</p>}
                 <p className="mt-2 text-xs text-customer-muted">Deliver to: {order.address.label} · {order.address.line1}, {order.address.city} – {order.address.pincode}</p>
               </article>
             ))}
