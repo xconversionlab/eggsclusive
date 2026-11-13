@@ -1,1 +1,0 @@
-import{c as e}from"./useSelector-Po_G4aGA.js";import{t}from"./index-CCoLiqYZ.js";import{c as n}from"./customer-BeDzbQBq.js";var r=e();function i(){let{orderId:e}=t.useParams();return(0,r.jsx)(n,{orderId:e})}export{i as component};
