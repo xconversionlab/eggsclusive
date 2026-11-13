@@ -232,7 +232,7 @@ export function SpencersCustomerApp() {
     let active = true;
     const restoreSession = async () => {
       try {
-        const response = await fetch("/api/customer-auth/session", {
+        const response = await fetch("/api/customer-auth", {
           credentials: "same-origin",
           cache: "no-store",
         });
@@ -301,11 +301,11 @@ export function SpencersCustomerApp() {
     setLoginError("");
     setAuthBusy(true);
     try {
-      const response = await fetch("/api/customer-auth/request-otp", {
+      const response = await fetch("/api/customer-auth", {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: digits }),
+        body: JSON.stringify({ action: "request-otp", phone: digits }),
       });
       const result = await response.json() as { ok?: boolean; error?: string; resendAfterSeconds?: number };
       if (!response.ok || !result.ok) throw new Error(result.error || "We couldn't send the OTP. Please try again.");
@@ -325,11 +325,11 @@ export function SpencersCustomerApp() {
     setLoginError("");
     setAuthBusy(true);
     try {
-      const response = await fetch("/api/customer-auth/verify-otp", {
+      const response = await fetch("/api/customer-auth", {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: phoneInput, code: otpInput.trim(), name: nameInput.trim() }),
+        body: JSON.stringify({ action: "verify-otp", phone: phoneInput, code: otpInput.trim(), name: nameInput.trim() }),
       });
       const result = await response.json() as {
         ok?: boolean; error?: string;
@@ -358,11 +358,11 @@ export function SpencersCustomerApp() {
   const logout = async () => {
     setAuthBusy(true);
     try {
-      await fetch("/api/customer-auth/logout", {
+      await fetch("/api/customer-auth", {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
-        body: "{}",
+        body: JSON.stringify({ action: "logout" }),
       });
     } finally {
       setData((current) => ({
