@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
-  Activity, ArrowRight, Check, ClipboardList, Droplets, Egg, Handshake,
+  Activity, ArrowRight, Check, ClipboardList, Egg, Handshake,
   House, LogOut, MapPin, Milk, Minus, Package, Plus, RefreshCw, ShieldCheck,
   Soup, UserRound, Wallet, X, MessageCircle,
 } from "lucide-react";
@@ -54,11 +54,8 @@ const dateLabel = (value: string) => new Date(value).toLocaleString("en-IN", {
 
 function BrandMark({ small = false }: { small?: boolean }) {
   return (
-    <div className={small ? "grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-dark" : "grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-brand-dark"}>
-      <svg viewBox="0 0 64 64" className={small ? "h-8 w-8" : "h-11 w-11"} aria-label="Spencers Enterprises logo mark">
-        <circle cx="32" cy="32" r="26" fill="none" stroke="#16a9ed" strokeWidth="4" />
-        <path d="M16 25 39 12 48 15 45 35 36 30 39 21 25 29 43 43 25 53 15 49 18 33 27 38 24 45 35 38Z" fill="#16a9ed" />
-      </svg>
+    <div className={small ? "grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-xl bg-brand-dark" : "grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-2xl bg-brand-dark"}>
+      <img src="/spencers-mark.jpg" alt="Spencers Enterprises" className={small ? "h-10 w-10 object-cover" : "h-14 w-14 object-cover"} />
     </div>
   );
 }
@@ -83,7 +80,7 @@ function QuantityControl({ value, onChange, unit }: { value: number; onChange: (
 function ProductIcon({ product }: { product: ProductKey }) {
   const shared = "h-8 w-8";
   if (product === "egg") return <Egg className={shared + " text-stone-500"} strokeWidth={1.5} />;
-  if (product === "water") return <Droplets className={shared + " text-brand"} strokeWidth={1.8} />;
+  if (product === "water") return <img src="/water-can.jpg" alt="Water can" className="h-10 w-10 rounded-full object-contain" />;
   if (product === "milk") return <Milk className={shared + " text-sky-700"} strokeWidth={1.5} />;
   return <Soup className={shared + " text-rose-700"} strokeWidth={1.5} />;
 }
