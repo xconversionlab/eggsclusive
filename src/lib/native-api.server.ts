@@ -263,9 +263,11 @@ export async function listNativeOrders(request: Request) {
   if (!customer) return { ok: false as const, status: 401, error: "Please log in again." };
   const sql = await getSql();
   const rows = await sql.query<Row>(
-    `select id, created_at, quantity, total_paise, payment_method, status,
+    `select id, created_at, quantity, total_paise, payment_method, payment_status, status,
             partner_name, partner_phone, delivery_otp_encrypted, address_label,
-            address_line, city, pincode
+            address_line, city, pincode, product_type, bottle_deposit_paise, floor_count,
+            floor_delivery_charge_paise, empty_bottles_to_return,
+            exists(select 1 from native_wallet_transactions t where t.order_id = native_orders.id and t.transaction_type = 'refund') as refund_applied
        from native_orders
       where customer_id = $1
       order by created_at desc limit 100`,
@@ -283,7 +285,14 @@ export async function listNativeOrders(request: Request) {
       quantity: Number(row.quantity),
       totalPaise: Number(row.total_paise),
       payment: String(row.payment_method),
+      paymentStatus: String(row.payment_status ?? "pending"),
       status: String(row.status),
+      productType: String(row.product_type ?? "egg"),
+      bottleDepositPaise: Number(row.bottle_deposit_paise ?? 0),
+      floorCount: Number(row.floor_count ?? 0),
+      floorDeliveryChargePaise: Number(row.floor_delivery_charge_paise ?? 0),
+      emptyBottlesToReturn: Boolean(row.empty_bottles_to_return ?? true),
+      refundApplied: Boolean(row.refund_applied),
       partnerName: String(row.partner_name),
       partnerPhone: String(row.partner_phone),
       deliveryOtp: decryptOtp(String(row.delivery_otp_encrypted)),
@@ -295,6 +304,90 @@ export async function listNativeOrders(request: Request) {
     });
   }
   return { ok: true as const, orders };
+}
+
+export async function createNativeComplaint(request: Request, body: unknown) {
+  requirePersistentDatabase();
+  const customer = await authenticateNativeRequest(request);
+  if (!customer) return { ok: false as const, status: 401, error: "Please log in again." };
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return { ok: false as const, status: 400, error: "Invalid support request." };
+  }
+  const message = typeof (body as Record<string, unknown>).message === "string"
+    ? String((body as Record<string, unknown>).message).trim().slice(0, 2000)
+    : "";
+  if (message.length < 5) return { ok: false as const, status: 400, error: "Please describe your issue in at least five characters." };
+  const id = "SUP-" + new Date().toISOString().slice(2, 10).replace(/-/g, "") + "-" + randomBytes(3).toString("hex").toUpperCase();
+  const sql = await getSql();
+  await sql.query(
+    "insert into native_complaints (id, customer_id, customer_name, customer_phone, message) values ($1,$2,$3,$4,$5)",
+    [id, customer.id, customer.name, customer.phone, message],
+  );
+  return { ok: true as const, ticketId: id, status: "open" };
+}
+
+export async function saveNativeCustomerAddresses(request: Request, body: unknown) {
+  requirePersistentDatabase();
+  const customer = await authenticateNativeRequest(request);
+  if (!customer) return { ok: false as const, status: 401, error: "Please log in again." };
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return { ok: false as const, status: 400, error: "Invalid addresses." };
+  }
+  const input = (body as Record<string, unknown>).addresses;
+  if (!Array.isArray(input) || input.length > 4) {
+    return { ok: false as const, status: 400, error: "You can save up to four delivery addresses." };
+  }
+  const addresses = input.map((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+    const value = item as Record<string, unknown>;
+    const address = safeAddress(value);
+    if (!address) return null;
+    const id = typeof value.id === "string" && value.id.trim() ? value.id.trim().slice(0, 80) : randomUUID();
+    return { id, ...address, isDefault: value.isDefault === true };
+  });
+  if (addresses.some((item) => item === null)) {
+    return { ok: false as const, status: 400, error: "One of the saved addresses is incomplete or invalid." };
+  }
+  const sql = await getSql();
+  const ids = addresses.map((item) => item!.id);
+  if (ids.length) {
+    await sql.query(
+      "delete from native_customer_addresses where customer_id = $1 and not (id = any($2::text[]))",
+      [customer.id, ids],
+    );
+  } else {
+    await sql.query("delete from native_customer_addresses where customer_id = $1", [customer.id]);
+  }
+  for (const item of addresses) {
+    if (!item) continue;
+    await sql.query(
+      \`insert into native_customer_addresses
+        (id, customer_id, label, door, street, area, landmark, city, pincode, latitude, longitude, is_default, updated_at)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,now())
+       on conflict (id) do update set
+         label = excluded.label, door = excluded.door, street = excluded.street,
+         area = excluded.area, landmark = excluded.landmark, city = excluded.city,
+         pincode = excluded.pincode, latitude = excluded.latitude, longitude = excluded.longitude,
+         is_default = excluded.is_default, updated_at = now()
+       where native_customer_addresses.customer_id = excluded.customer_id\`,
+      [item.id, customer.id, item.label, item.door, item.street, item.area, item.landmark,
+       item.city, item.pincode, item.latitude, item.longitude, item.isDefault],
+    );
+  }
+  return { ok: true as const, saved: addresses.length };
+}
+
+export async function listNativeCustomerAddresses(request: Request) {
+  requirePersistentDatabase();
+  const customer = await authenticateNativeRequest(request);
+  if (!customer) return { ok: false as const, status: 401, error: "Please log in again." };
+  const sql = await getSql();
+  const rows = await sql.query<Row>(
+    \`select id, label, door, street, area, landmark, city, pincode, latitude, longitude, is_default
+       from native_customer_addresses where customer_id = $1 order by is_default desc, created_at asc\`,
+    [customer.id],
+  );
+  return { ok: true as const, addresses: rows };
 }
 
 function isOperationsRequest(request: Request): boolean {
