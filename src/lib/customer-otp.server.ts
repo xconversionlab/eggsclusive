@@ -87,7 +87,7 @@ function assertSameOrigin(request: Request) {
   }
 }
 
-export async function requestCustomerOtp(phoneInput: unknown) {
+export async function requestCustomerOtp(phoneInput: unknown, requesterInput: unknown) {
   requirePersistentDatabase();
   const phone = normalizeIndianPhone(phoneInput);
   if (!phone) return { ok: false as const, status: 400, error: "Enter a valid 10-digit Indian mobile number." };
@@ -100,18 +100,29 @@ export async function requestCustomerOtp(phoneInput: unknown) {
     return { ok: false as const, status: 503, error: "SMS delivery is not configured yet. Please contact the store." };
   }
 
+  const requester = typeof requesterInput === "string" && requesterInput.trim()
+    ? requesterInput.trim().slice(0, 160)
+    : "unknown";
+  const requesterHash = createHmac("sha256", authSecret()).update("requester|" + requester).digest("hex");
   const sql = await getSql();
-  const recent = await sql.query<{ last_at: string | null; count: number }>(
+  const recentPhone = await sql.query<{ last_at: string | null; count: number }>(
     "select max(created_at) as last_at, count(*)::int as count from native_otp_challenges where phone = $1 and created_at > now() - interval '1 hour'",
     [phone],
   );
-  const count = Number(recent[0]?.count ?? 0);
-  const lastAt = recent[0]?.last_at ? new Date(recent[0].last_at).getTime() : 0;
+  const phoneCount = Number(recentPhone[0]?.count ?? 0);
+  const lastAt = recentPhone[0]?.last_at ? new Date(recentPhone[0].last_at).getTime() : 0;
   if (lastAt && Date.now() - lastAt < OTP_RESEND_SECONDS * 1000) {
     return { ok: false as const, status: 429, error: "Please wait before requesting another OTP." };
   }
-  if (count >= OTP_MAX_PER_HOUR) {
-    return { ok: false as const, status: 429, error: "OTP request limit reached. Try again after an hour." };
+  if (phoneCount >= OTP_MAX_PER_HOUR) {
+    return { ok: false as const, status: 429, error: "OTP request limit reached for this number. Try again after an hour." };
+  }
+  const recentRequester = await sql.query<{ count: number }>(
+    "select count(*)::int as count from native_otp_challenges where requester_hash = $1 and created_at > now() - interval '1 hour'",
+    [requesterHash],
+  );
+  if (Number(recentRequester[0]?.count ?? 0) >= 15) {
+    return { ok: false as const, status: 429, error: "Too many OTP requests from this connection. Try again later." };
   }
 
   const otp = String(randomInt(100000, 1000000));
@@ -143,8 +154,8 @@ export async function requestCustomerOtp(phoneInput: unknown) {
   }
 
   await sql.query(
-    "insert into native_otp_challenges (id, phone, otp_hash, expires_at) values ($1, $2, $3, now() + interval '5 minutes')",
-    [randomUUID(), phone, otpDigest(phone, otp)],
+    "insert into native_otp_challenges (id, phone, requester_hash, otp_hash, expires_at) values ($1, $2, $3, $4, now() + interval '5 minutes')",
+    [randomUUID(), phone, requesterHash, otpDigest(phone, otp)],
   );
   return { ok: true as const, phone, expiresInSeconds: OTP_TTL_SECONDS, resendAfterSeconds: OTP_RESEND_SECONDS };
 }
