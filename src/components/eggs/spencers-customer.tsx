@@ -62,16 +62,16 @@ function BrandMark({ small = false }: { small?: boolean }) {
 
 function QuantityControl({ value, onChange, unit }: { value: number; onChange: (n: number) => void; unit: string }) {
   return (
-    <div className="flex items-center gap-2">
-      <button type="button" aria-label={"Decrease " + unit} onClick={() => onChange(Math.max(0, value - 1))} className="grid h-10 w-10 place-items-center rounded-full border border-customer-line bg-white text-brand-dark disabled:opacity-35" disabled={value === 0}>
-        <Minus size={16} />
+    <div className="flex items-center gap-1">
+      <button type="button" aria-label={"Decrease " + unit} onClick={() => onChange(Math.max(0, value - 1))} className="grid h-8 w-8 place-items-center rounded-full border border-customer-line bg-white text-brand-dark disabled:opacity-35" disabled={value === 0}>
+        <Minus size={14} />
       </button>
-      <div className="min-w-12 text-center">
-        <div className="text-lg font-semibold tabular-nums text-customer-ink">{value}</div>
-        <div className="text-[11px] text-customer-muted">{unit}</div>
+      <div className="min-w-8 text-center">
+        <div className="text-base font-semibold tabular-nums text-customer-ink">{value}</div>
+        <div className="text-[10px] text-customer-muted">{unit}</div>
       </div>
-      <button type="button" aria-label={"Increase " + unit} onClick={() => onChange(value + 1)} className="grid h-10 w-10 place-items-center rounded-full bg-brand-dark text-white">
-        <Plus size={16} />
+      <button type="button" aria-label={"Increase " + unit} onClick={() => onChange(value + 1)} className="grid h-8 w-8 place-items-center rounded-full bg-brand-dark text-white">
+        <Plus size={14} />
       </button>
     </div>
   );
@@ -92,24 +92,37 @@ function ProductCard({
   noEmptyBottles: boolean; setNoEmptyBottles: (v: boolean) => void;
 }) {
   const descriptions: Record<ProductKey, string> = {
-    egg: "Fresh eggs, delivered to your doorstep.",
+    egg: "",
     water: "20-litre water can",
     milk: "Price and pack size to be confirmed",
     curd: "Price and pack size to be confirmed",
   };
+  const total = product === "egg"
+    ? PRICE.egg * quantity
+    : product === "water"
+      ? PRICE.water * quantity + (noEmptyBottles ? PRICE.bottle * quantity : 0)
+      : 0;
   return (
     <article className="rounded-2xl border border-customer-line bg-white p-4 shadow-card">
-      <div className="flex items-center gap-3">
-        <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-brand-pale">
-          <ProductIcon product={product} />
+      <div className="grid grid-cols-[112px_minmax(0,1fr)_66px] items-center gap-3">
+        <div className="flex flex-col items-center gap-2">
+          <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-brand-pale">
+            <ProductIcon product={product} />
+          </div>
+          <QuantityControl value={quantity} onChange={setQuantity} unit={product === "egg" ? "eggs" : product === "water" ? "cans" : "units"} />
         </div>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0">
           <h3 className="font-semibold text-customer-ink">{PRODUCT_NAMES[product]}</h3>
-          <p className="mt-1 text-xs text-customer-muted">{descriptions[product]}</p>
+          {descriptions[product] ? <p className="mt-1 text-xs text-customer-muted">{descriptions[product]}</p> : null}
           {product === "egg" ? <p className="mt-1 text-sm font-semibold text-brand">₹7 per egg</p> : null}
           {product === "water" ? <p className="mt-1 text-sm font-semibold text-brand">₹30 per can · ₹150 refundable bottle deposit</p> : null}
         </div>
-        <QuantityControl value={quantity} onChange={setQuantity} unit={product === "egg" ? "eggs" : product === "water" ? "cans" : "units"} />
+        <div className="pt-2 text-right">
+          <p className="text-base font-semibold tabular-nums text-customer-ink">
+            {product === "milk" || product === "curd" ? (quantity > 0 ? "Quote" : "—") : quantity > 0 ? money(total) : "—"}
+          </p>
+          <p className="mt-1 text-[10px] leading-tight text-customer-muted">Line total</p>
+        </div>
       </div>
       {product === "egg" ? (
         <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-customer-line pt-3">
@@ -136,7 +149,6 @@ function ProductCard({
     </article>
   );
 }
-
 function PriceRow({ label, detail, value }: { label: string; detail: string; value: number }) {
   return (
     <div className="flex items-center justify-between gap-3">
