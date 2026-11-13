@@ -92,6 +92,8 @@ export async function requestCustomerOtp(phoneInput: unknown) {
   const phone = normalizeIndianPhone(phoneInput);
   if (!phone) return { ok: false as const, status: 400, error: "Enter a valid 10-digit Indian mobile number." };
 
+  // Fail before contacting the SMS provider if the OTP/session signing secret is absent.
+  authSecret();
   const apiKey = env("TWOFACTOR_API_KEY");
   const templateName = env("TWOFACTOR_OTP_TEMPLATE_NAME");
   if (!apiKey || !templateName) {
