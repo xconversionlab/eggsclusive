@@ -205,8 +205,8 @@ private fun SpencersApp() {
     var profile by remember { mutableStateOf(loadProfile(prefs)) }
     var sessionToken by remember { mutableStateOf(prefs.getString("native_session_token", "").orEmpty()) }
     var orders by remember { mutableStateOf(loadOrders(prefs)) }
-    var walletBalance by remember { mutableIntStateOf(prefs.getInt("wallet_balance", 0)) }
-    var walletEntries by remember { mutableStateOf(loadWallet(prefs)) }
+    var walletBalance by remember { mutableIntStateOf(0) }
+    var walletEntries by remember { mutableStateOf(emptyList<WalletTransaction>()) }
     var selectedProductType by rememberSaveable { mutableStateOf("egg") }
     var eggQuantity by rememberSaveable { mutableIntStateOf(12) }
     var waterQuantity by rememberSaveable { mutableIntStateOf(1) }
@@ -234,6 +234,7 @@ private fun SpencersApp() {
             put("street", address.street); put("area", address.area); put("landmark", address.landmark)
             put("city", address.city); put("pincode", address.pincode)
             put("latitude", address.latitude); put("longitude", address.longitude)
+            put("isDefault", address.id == saved.selectedAddressId)
         }) }
         prefs.edit().putString("profile_name", saved.name).putString("profile_phone", saved.phone)
             .putString("profile_door", saved.door).putString("profile_street", saved.street)
@@ -244,6 +245,14 @@ private fun SpencersApp() {
             .putString("profile_saved_addresses", array.toString())
             .putFloat("profile_latitude", saved.latitude.toFloat()).putFloat("profile_longitude", saved.longitude.toFloat())
             .putBoolean("profile_phone_verified", saved.phoneVerified).apply()
+        if (sessionToken.isNotBlank()) {
+            val addressBody = JSONObject().put("addresses", array)
+            scope.launch(Dispatchers.IO) {
+                runCatching {
+                    nativeApiRequest("/api/native/addresses", "POST", addressBody, sessionToken)
+                }
+            }
+        }
     }
     fun updateWallet(nextBalance: Int, entry: WalletTransaction) {
         walletBalance = nextBalance
@@ -376,6 +385,36 @@ private fun SpencersApp() {
             },
         )
         return
+    }
+
+    LaunchedEffect(sessionToken) {
+        if (sessionToken.isNotBlank()) {
+            while (true) {
+                try {
+                    val remoteWallet = withContext(Dispatchers.IO) {
+                        nativeApiRequest("/api/native/wallet", "GET", bearerToken = sessionToken)
+                    }
+                    walletBalance = remoteWallet.optInt("balancePaise", 0)
+                    val rows = remoteWallet.optJSONArray("transactions") ?: JSONArray()
+                    walletEntries = (0 until rows.length()).mapNotNull { index ->
+                        val item = rows.optJSONObject(index) ?: return@mapNotNull null
+                        WalletTransaction(
+                            id = item.optString("id"),
+                            createdAt = item.optLong("createdAt"),
+                            title = item.optString("description"),
+                            amountPaise = item.optInt("amountPaise"),
+                            balancePaise = item.optInt("balanceAfterPaise"),
+                        )
+                    }
+                } catch (_: Exception) {
+                    // Keep the last server-confirmed balance visible during temporary connectivity loss.
+                }
+                delay(30000)
+            }
+        } else {
+            walletBalance = 0
+            walletEntries = emptyList()
+        }
     }
 
     LaunchedEffect(tab, sessionToken) {
