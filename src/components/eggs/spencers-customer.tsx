@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
-  Activity, ArrowRight, Check, ClipboardList, Egg, Handshake,
+  ArrowRight, Check, ClipboardList, Egg, Handshake,
   House, LogOut, MapPin, Milk, Minus, Package, Plus, RefreshCw, ShieldCheck,
   Soup, UserRound, Wallet, X, MessageCircle,
 } from "lucide-react";
@@ -149,7 +149,7 @@ function PriceRow({ label, detail, value }: { label: string; detail: string; val
 function BottomNav({ active, onChange }: { active: Tab; onChange: (tab: Tab) => void }) {
   const items: { id: Tab; label: string; icon: typeof House }[] = [
     { id: "home", label: "Order", icon: House },
-    { id: "activity", label: "Activity", icon: Activity },
+    { id: "activity", label: "Status", icon: ClipboardList },
     { id: "wallet", label: "Wallet", icon: Wallet },
     { id: "profile", label: "Profile", icon: UserRound },
   ];
@@ -276,9 +276,17 @@ export function SpencersCustomerApp() {
       setNotice("Enter your name, 10-digit phone number and area."); return;
     }
     setData((current) => ({ ...current, partnerRequests: [partnerForm, ...current.partnerRequests] }));
+    const message = [
+      "Spencer's Enterprises — Partnership enquiry",
+      "Name: " + partnerForm.name.trim(),
+      "Phone: " + partnerForm.phone.replace(/\D/g, ""),
+      "Area: " + partnerForm.area.trim(),
+      partnerForm.note.trim() ? "Note: " + partnerForm.note.trim() : "",
+    ].filter(Boolean).join("\n");
+    window.open("https://wa.me/?text=" + encodeURIComponent(message), "_blank", "noopener,noreferrer");
     setPartnerOpen(false);
     setPartnerForm({ name: "", phone: "", area: "", note: "" });
-    setNotice("Thanks. Your partnership interest has been saved on this device.");
+    setNotice("Your enquiry is saved here. WhatsApp opened with the details ready to share with Spencer's team.");
   };
 
   if (!hydrated) {
@@ -397,7 +405,7 @@ export function SpencersCustomerApp() {
         ) : null}
         {tab === "activity" ? (
           <section className="space-y-3">
-            <div><h2 className="text-2xl font-bold">Activity</h2><p className="mt-1 text-sm text-customer-muted">Track your orders and delivery updates</p></div>
+            <div><h2 className="text-2xl font-bold">Status</h2><p className="mt-1 text-sm text-customer-muted">Track your orders and delivery updates</p></div>
             {data.orders.length === 0 ? <EmptyState icon={<ClipboardList size={25} />} title="No orders yet" detail="Your placed orders and their status will appear here." /> : null}
             {data.orders.map((order) => (
               <article key={order.id} className="rounded-2xl border border-customer-line bg-white p-4 shadow-card">
