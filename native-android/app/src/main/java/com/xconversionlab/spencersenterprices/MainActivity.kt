@@ -74,7 +74,7 @@ internal val Green = Color(0xFF16845A)
 private const val PRICE_PER_EGG_PAISE = 700
 private const val PREFS_NAME = "spencers_native_customer"
 
-private enum class MainTab(val label: String) { Order("Order"), Status("Status"), Profile("Profile") }
+private enum class MainTab(val label: String) { Order("Order"), Status("Activity"), Profile("Profile") }
 
 private data class SavedAddress(
     val id: String,
@@ -133,6 +133,9 @@ private data class CustomerOrder(
     val addressLabel: String = "",
     val deliveryAddress: String = "",
     val refundApplied: Boolean = false,
+    val productType: String = "egg",
+    val bottleDepositPaise: Int = 0,
+    val floorCount: Int = 0,
 )
 
 private data class DeliveryPartner(
@@ -204,10 +207,10 @@ private fun SpencersApp() {
     var orders by remember { mutableStateOf(loadOrders(prefs)) }
     var walletBalance by remember { mutableIntStateOf(prefs.getInt("wallet_balance", 0)) }
     var walletEntries by remember { mutableStateOf(loadWallet(prefs)) }
-    var quantity by rememberSaveable { mutableIntStateOf(12) }
-    var slot by rememberSaveable { mutableStateOf("Morning · 7:30–9:30 AM") }
-    var payment by rememberSaveable { mutableStateOf("UPI · demo") }
-    var showTopUp by remember { mutableStateOf(false) }
+    var selectedProductType by rememberSaveable { mutableStateOf("egg") }
+    var eggQuantity by rememberSaveable { mutableIntStateOf(12) }
+    var waterQuantity by rememberSaveable { mutableIntStateOf(1) }
+    var noEmptyBottles by rememberSaveable { mutableStateOf(false) }
     var showMap by remember { mutableStateOf(false) }
     var showSplash by rememberSaveable { mutableStateOf(true) }
     var placingOrder by remember { mutableStateOf(false) }
