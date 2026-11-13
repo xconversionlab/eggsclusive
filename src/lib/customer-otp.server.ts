@@ -195,11 +195,11 @@ async function twilioVerifyRequest(
   let response: Response;
   try {
     response = await fetch(
-      \`https://verify.twilio.com/v2/Services/\${config.serviceSid}/\${resource}\`,
+      `https://verify.twilio.com/v2/Services/${config.serviceSid}/${resource}`,
       {
         method: "POST",
         headers: {
-          Authorization: "Basic " + Buffer.from(\`\${config.apiKeySid}:\${config.apiKeySecret}\`).toString("base64"),
+          Authorization: "Basic " + Buffer.from(`${config.apiKeySid}:${config.apiKeySecret}`).toString("base64"),
           "Content-Type": "application/x-www-form-urlencoded",
           Accept: "application/json",
         },
