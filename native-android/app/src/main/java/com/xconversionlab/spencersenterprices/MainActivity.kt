@@ -389,6 +389,38 @@ private fun SpencersApp() {
 
     LaunchedEffect(sessionToken) {
         if (sessionToken.isNotBlank()) {
+            try {
+                val remoteAddresses = withContext(Dispatchers.IO) {
+                    nativeApiRequest("/api/native/addresses", "GET", bearerToken = sessionToken)
+                }
+                val addressRows = remoteAddresses.optJSONArray("addresses") ?: JSONArray()
+                val savedAddresses = (0 until addressRows.length()).mapNotNull { index ->
+                    val item = addressRows.optJSONObject(index) ?: return@mapNotNull null
+                    SavedAddress(
+                        item.optString("id"),
+                        item.optString("label", "Home"),
+                        item.optString("door"),
+                        item.optString("street"),
+                        item.optString("area"),
+                        item.optString("landmark"),
+                        item.optString("city", "Chennai"),
+                        item.optString("pincode"),
+                        item.optDouble("latitude"),
+                        item.optDouble("longitude"),
+                    )
+                }.takeLast(4)
+                if (savedAddresses.isNotEmpty()) {
+                    val selectedId = (0 until addressRows.length())
+                        .mapNotNull { addressRows.optJSONObject(it) }
+                        .firstOrNull { it.optBoolean("is_default", false) }
+                        ?.optString("id")
+                        .orEmpty()
+                    val selected = savedAddresses.firstOrNull { it.id == selectedId } ?: savedAddresses.first()
+                    profile = profile.withAddress(selected).copy(savedAddresses = savedAddresses)
+                }
+            } catch (_: Exception) {
+                // Local address cache remains available when the server is temporarily unreachable.
+            }
             while (true) {
                 try {
                     val remoteWallet = withContext(Dispatchers.IO) {
@@ -543,7 +575,7 @@ private fun SpencersApp() {
                 MainTab.Status -> ActivityScreen(historyPage, { historyPage = it }, orders, walletBalance, walletEntries)
                 MainTab.Profile -> ProfileScreen(
                     profile, { profile = it },
-                    { saveProfile(profile); scope.launch { snackbar.showSnackbar("Profile and saved addresses updated on this device.") } },
+                    { saveProfile(profile); scope.launch { snackbar.showSnackbar("Profile and saved addresses saved.") } },
                     { showMap = true },
                     onComplaint = { complaint ->
                         scope.launch {
