@@ -12,8 +12,8 @@ android {
         applicationId = "com.xconversionlab.spencersenterprices"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "1.1.0"
+        versionCode = 4
+        versionName = "1.2.0"
         buildConfigField("String", "API_BASE_URL", "\"https://eggsclusive-preview.vercel.app\"")
     }
 
