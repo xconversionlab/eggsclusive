@@ -31,12 +31,14 @@ function Splash() {
 }
 
 export function Frame({ children }: { children: ReactNode }) {
+  const path = useRouterState({ select: (s) => s.location.pathname });
   const ready = useHydrated();
   const lang = useEggs((s) => s.lang);
   useEffect(() => {
     if (!ready) return;
     document.documentElement.lang = lang === "ta" ? "ta" : "en";
   }, [lang, ready]);
+  if (path === "/") return <>{children}</>;
   if (!ready) return <Splash />;
   return (
     <div className="min-h-screen bg-paper text-ink">
