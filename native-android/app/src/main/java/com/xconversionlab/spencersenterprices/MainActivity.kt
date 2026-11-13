@@ -956,7 +956,7 @@ private fun ProfileScreen(
                         color = if (profile.phoneVerified) Green else Muted,
                         fontSize = 11.sp,
                     )
-                    Text("To change this number, sign in with the new number after logging out.", color = Muted, fontSize = 10.sp)
+                    Text("To change this number, contact Spencer's support to re-verify your account.", color = Muted, fontSize = 10.sp)
                 }
             }
         }
