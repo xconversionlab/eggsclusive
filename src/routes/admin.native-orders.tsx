@@ -113,7 +113,11 @@ function NativeOrdersOperations() {
         return copy;
       });
       setNotice(
-        data.notification === "submitted"
+        data.refundApplied
+          ? "Order cancelled. The paid amount was credited to the customer's Eggsclusive wallet."
+          : data.status === "cancelled"
+            ? "Order cancelled. No captured payment was found, so no wallet refund was created."
+            : data.notification === "submitted"
           ? `Status updated. SMS accepted by provider for ${order.phone}.`
           : data.notification === "not_configured"
             ? "Status updated. Transactional SMS template/API is not configured yet."
@@ -246,7 +250,7 @@ function NativeOrdersOperations() {
                 className="min-h-12 min-w-0 flex-1 rounded-xl border border-[#dce5f0] bg-white px-3"
               >
                 <option value="">Update delivery status…</option>
-                {STATUS_OPTIONS.filter((option) => option.value !== order.status).map((option) => (
+                {STATUS_OPTIONS.filter((option) => option.value !== order.status && order.status !== "cancelled" && order.status !== "delivered").map((option) => (
                   <option key={option.value} value={option.value}>{option.label}</option>
                 ))}
               </select>
