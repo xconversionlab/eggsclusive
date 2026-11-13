@@ -1,6 +1,15 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 
+type NativeComplaint = {
+  id: string;
+  customer_name: string;
+  customer_phone: string;
+  message: string;
+  status: string;
+  created_at: string;
+};
+
 type NativeOrder = {
   id: string;
   customerName: string;
@@ -8,6 +17,9 @@ type NativeOrder = {
   quantity: number;
   totalPaise: number;
   payment: string;
+  paymentStatus?: string;
+  productType?: string;
+  bottleDepositPaise?: number;
   status: string;
   partnerShop: string;
   partnerName: string;
@@ -39,6 +51,7 @@ export const Route = createFileRoute("/admin/native-orders")({
 function NativeOrdersOperations() {
   const [opsKey, setOpsKey] = useState("");
   const [orders, setOrders] = useState<NativeOrder[]>([]);
+  const [complaints, setComplaints] = useState<NativeComplaint[]>([]);
   const [nextStatus, setNextStatus] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [updatingId, setUpdatingId] = useState("");
@@ -59,6 +72,13 @@ function NativeOrdersOperations() {
       if (!response.ok || !data.ok) throw new Error(data.error || "Could not load orders.");
       setOrders(data.orders || []);
       setNextStatus({});
+      const supportResponse = await fetch("/api/native/ops/complaints", {
+        headers: { "x-native-ops-key": opsKey.trim() },
+        cache: "no-store",
+      });
+      const supportData = await supportResponse.json();
+      if (!supportResponse.ok || !supportData.ok) throw new Error(supportData.error || "Orders loaded, but support tickets could not be loaded.");
+      setComplaints(supportData.complaints || []);
       setNotice("Orders refreshed.");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not load orders.");
@@ -110,7 +130,7 @@ function NativeOrdersOperations() {
     <main className="min-h-screen bg-[#f4f7fb] px-4 py-6 text-[#14243a] md:px-8">
       <div className="mx-auto flex max-w-5xl flex-col gap-5">
         <header className="rounded-3xl bg-[#07172e] p-6 text-white">
-          <p className="text-xs font-bold uppercase tracking-[.2em] text-sky-300">Spencers Enterprices · Operations</p>
+          <p className="text-xs font-bold uppercase tracking-[.2em] text-sky-300">Eggsclusive · Spencer's Enterprises Operations</p>
           <h1 className="mt-2 text-3xl font-extrabold">Order status desk</h1>
           <p className="mt-2 max-w-2xl text-sm text-white/70">
             Review native-app orders, update delivery progress and trigger the configured customer status message.
@@ -166,6 +186,30 @@ function NativeOrdersOperations() {
           </div>
         ) : null}
 
+        <section className="mt-6 flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-extrabold">Customer support</h2>
+            <p className="text-sm text-[#6b7a90]">{complaints.length} ticket(s) loaded</p>
+          </div>
+        </section>
+        {complaints.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-[#cbd6e4] bg-white p-6 text-sm text-[#6b7a90]">
+            No customer complaints have been submitted.
+          </div>
+        ) : complaints.map((ticket) => (
+          <article key={ticket.id} className="rounded-2xl border border-[#dce5f0] bg-white p-4 shadow-sm">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wide text-sky-700">{ticket.id}</p>
+                <h3 className="mt-1 font-extrabold">{ticket.customer_name}</h3>
+                <p className="text-sm text-[#6b7a90]">{ticket.customer_phone} · {formatDate(new Date(ticket.created_at).getTime())}</p>
+              </div>
+              <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-bold capitalize text-amber-800">{ticket.status.replaceAll("_", " ")}</span>
+            </div>
+            <p className="mt-3 whitespace-pre-wrap rounded-xl bg-[#f4f7fb] p-3 text-sm">{ticket.message}</p>
+          </article>
+        ))}
+        
         {orders.map((order) => (
           <article key={order.id} className="rounded-2xl border border-[#dce5f0] bg-white p-4 shadow-sm">
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -181,8 +225,9 @@ function NativeOrdersOperations() {
             <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
               <div>
                 <p className="text-xs font-bold uppercase tracking-wide text-[#6b7a90]">Order</p>
-                <p className="mt-1">{order.quantity} eggs · {formatMoney(order.totalPaise)}</p>
-                <p className="text-[#6b7a90]">{order.payment}</p>
+                <p className="mt-1">{order.productType === "water_can" ? "Water Can" : "Fresh Egg"} × {order.quantity} · {formatMoney(order.totalPaise)}</p>
+                {order.bottleDepositPaise ? <p className="text-[#6b7a90]">Bottle deposit: {formatMoney(order.bottleDepositPaise)}</p> : null}
+                <p className="text-[#6b7a90]">{order.payment} · {order.paymentStatus || "pending"}</p>
               </div>
               <div>
                 <p className="text-xs font-bold uppercase tracking-wide text-[#6b7a90]">Delivery partner</p>
