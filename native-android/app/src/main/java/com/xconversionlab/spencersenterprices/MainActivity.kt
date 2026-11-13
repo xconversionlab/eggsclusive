@@ -810,26 +810,26 @@ private fun ActivityScreen(
     orders: List<CustomerOrder>,
     walletBalance: Int,
     walletEntries: List<WalletTransaction>,
-    onAddFunds: () -> Unit,
 ) {
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(15.dp),
     ) {
-        BrandHeader("YOUR ACCOUNT", "Status", "Track orders and view wallet activity.")
+        BrandHeader("YOUR ACCOUNT", "Activity", "Follow every order and view wallet refunds.")
         Row(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(15.dp)).background(Color.White).padding(4.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            InnerTab("Order status", page == "orders", Modifier.weight(1f)) { onPageChange("orders") }
+            InnerTab("Orders", page == "orders", Modifier.weight(1f)) { onPageChange("orders") }
             InnerTab("Wallet", page == "wallet", Modifier.weight(1f)) { onPageChange("wallet") }
         }
         if (page == "orders") {
             SectionHeading("Your orders", orders.size.toString() + " order(s)")
             if (orders.isEmpty()) {
-                EmptyState("🧺", "No orders yet", "Your order and delivery updates will appear here.")
+                EmptyState("🧺", "No orders yet", "Your order, delivery partner and delivery OTP will appear here.")
             } else orders.forEach { order ->
-                val stageNames = listOf("Order placed", "Partner allocated", "Preparing", "Out for delivery", "Delivered")
+                val cancelled = order.status.equals("Cancelled", true) || order.status.equals("cancelled", true)
+                val stageNames = listOf("Order placed", "Delivery partner assigned", "Preparing", "Out for delivery", "Delivered")
                 val stage = when (order.status.lowercase(Locale.US)) {
                     "order placed", "placed" -> if (order.partnerName.isNotBlank()) 1 else 0
                     "accepted", "partner allocated", "partner accepted" -> 1
@@ -850,77 +850,83 @@ private fun ActivityScreen(
                                 Text(order.id, fontWeight = FontWeight.ExtraBold, color = Navy)
                                 Text(formatDate(order.createdAt), color = Muted, fontSize = 10.sp)
                             }
-                            Surface(color = if (stage == 4) Color(0xFFE7F6EF) else if (stage < 0) Color(0xFFFFEDEC) else PaleBlue, shape = RoundedCornerShape(50)) {
-                                Text(order.status, color = if (stage == 4) Green else if (stage < 0) Color(0xFFB42318) else Blue,
-                                    fontWeight = FontWeight.Bold, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp))
+                            Surface(
+                                color = if (stage == 4) Color(0xFFE7F6EF) else if (cancelled) Color(0xFFFFEDEC) else PaleBlue,
+                                shape = RoundedCornerShape(50),
+                            ) {
+                                Text(
+                                    order.status,
+                                    color = if (stage == 4) Green else if (cancelled) Color(0xFFB42318) else Blue,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 10.sp,
+                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
+                                )
                             }
                         }
                         Divider(color = Line)
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Fresh Egg × ${order.quantity}", color = Ink, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                            Text(
+                                (if (order.productType == "water_can") "Water Can" else "Fresh Egg") + " × \${order.quantity}",
+                                color = Ink,
+                                fontSize = 12.sp,
+                                modifier = Modifier.weight(1f),
+                            )
                             Text(money(order.totalPaise), color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
                         }
-                        if (stage >= 0) {
+                        if (order.productType == "water_can" && order.bottleDepositPaise > 0) {
+                            Text("Bottle deposit included: \${money(order.bottleDepositPaise)}", color = Muted, fontSize = 10.sp)
+                        }
+                        if (cancelled) {
+                            Text(
+                                if (order.refundApplied) "Cancelled by the business · refund credited to your wallet."
+                                else "Cancelled by the business. Any eligible captured payment will be credited to your wallet.",
+                                color = Color(0xFF9A3412), fontSize = 11.sp, lineHeight = 16.sp,
+                            )
+                        } else {
                             Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
                                 stageNames.forEachIndexed { index, label ->
                                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         Box(
-                                            Modifier.size(19.dp).clip(CircleShape)
-                                                .background(if (index <= stage) Blue else Line),
+                                            Modifier.size(19.dp).clip(CircleShape).background(if (index <= stage) Blue else Line),
                                             contentAlignment = Alignment.Center,
                                         ) {
                                             if (index <= stage) Text("✓", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Black)
                                         }
-                                        Text(label, color = if (index <= stage) Navy else Muted, fontSize = 11.sp,
-                                            fontWeight = if (index == stage) FontWeight.ExtraBold else FontWeight.Normal)
+                                        Text(
+                                            label,
+                                            color = if (index <= stage) Navy else Muted,
+                                            fontSize = 11.sp,
+                                            fontWeight = if (index == stage) FontWeight.ExtraBold else FontWeight.Normal,
+                                        )
                                     }
                                 }
                             }
-                        } else if (order.status.equals("Cancelled", true)) {
-                            Text(
-                                if (order.refundApplied) "Cancelled by operations · refund credited to your wallet."
-                                else "Cancelled by operations · wallet refund is pending confirmation.",
-                                color = Color(0xFF9A3412), fontSize = 11.sp, lineHeight = 16.sp,
-                            )
-                        } else {
-                            Text("This order status is being reviewed by the operations team.", color = Muted, fontSize = 11.sp)
-                        }
-                        if (order.partnerName.isNotBlank()) {
-                            Divider(color = Line)
-                            Text("DELIVERY PARTNER", color = Blue, fontSize = 9.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.2.sp)
-                            Text(order.partnerName, color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp)
-                            if (order.partnerPhone.isNotBlank()) Text("Partner contact: +91 ${order.partnerPhone}", color = Muted, fontSize = 11.sp)
-                        } else {
-                            Text("Delivery partner: awaiting allocation", color = Muted, fontSize = 11.sp)
-                        }
-                        if (order.deliveryOtp.isNotBlank() && stage in 0..3) {
-                            Card(colors = CardDefaults.cardColors(containerColor = PaleBlue), shape = RoundedCornerShape(14.dp)) {
-                                Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                    Text("DELIVERY OTP", color = Blue, fontSize = 9.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.2.sp)
-                                    Text(order.deliveryOtp, color = Navy, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 3.sp)
-                                    Text("Share this code with the delivery partner only when your order reaches you.", color = Muted, fontSize = 10.sp, lineHeight = 14.sp)
-                                    Text("Share this code with your delivery partner when your order arrives.", color = Color(0xFF9A3412), fontSize = 9.sp)
+                            if (order.partnerName.isNotBlank()) {
+                                Divider(color = Line)
+                                Text("DELIVERY PARTNER", color = Blue, fontSize = 9.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.2.sp)
+                                Text(order.partnerName, color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp)
+                                if (order.partnerPhone.isNotBlank()) {
+                                    Text("Partner contact: +91 \${order.partnerPhone}", color = Muted, fontSize = 11.sp)
+                                }
+                            } else {
+                                Text("Delivery partner: being assigned", color = Muted, fontSize = 11.sp)
+                            }
+                            if (order.deliveryOtp.isNotBlank() && stage in 0..3) {
+                                Card(colors = CardDefaults.cardColors(containerColor = PaleBlue), shape = RoundedCornerShape(14.dp)) {
+                                    Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                        Text("DELIVERY OTP", color = Blue, fontSize = 9.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.2.sp)
+                                        Text(order.deliveryOtp, color = Navy, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 3.sp)
+                                        Text("Share this code with the delivery partner only when the order reaches you.", color = Muted, fontSize = 10.sp, lineHeight = 14.sp)
+                                    }
                                 }
                             }
                         }
                         if (order.deliveryAddress.isNotBlank()) {
                             Text(order.addressLabel + " · " + order.deliveryAddress, color = Muted, fontSize = 10.sp, lineHeight = 15.sp)
                         }
-                        Text(
-                            when (order.payment) {
-                                "UPI · demo" -> "Payment: UPI demo (not charged)"
-                                "Wallet" -> "Paid from wallet"
-                                else -> "Payment: " + order.payment
-                            },
-                            color = Muted, fontSize = 10.sp,
-                        )
                     }
                 }
             }
-            Text(
-                "Status changes, partner acceptance and delivery completion must be sent by the connected partner/operations service. This APK currently stores the demo timeline on this phone.",
-                color = Muted, fontSize = 10.sp, lineHeight = 15.sp,
-            )
         } else {
             Card(colors = CardDefaults.cardColors(containerColor = Navy), shape = RoundedCornerShape(24.dp), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(19.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -930,16 +936,12 @@ private fun ActivityScreen(
                             fontWeight = FontWeight.ExtraBold, letterSpacing = 1.4.sp, modifier = Modifier.padding(start = 8.dp))
                     }
                     Text(money(walletBalance), color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.ExtraBold)
-                    Text("Available balance", color = Color.White.copy(alpha = .7f), fontSize = 12.sp)
-                    Button(onClick = onAddFunds, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(13.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Navy)) {
-                        Text("Add demo funds", fontWeight = FontWeight.Bold)
-                    }
+                    Text("Available refund balance", color = Color.White.copy(alpha = .7f), fontSize = 12.sp)
                 }
             }
             Text("Transactions", fontWeight = FontWeight.ExtraBold, color = Navy, fontSize = 17.sp)
             if (walletEntries.isEmpty()) {
-                EmptyState("💳", "No wallet activity", "Wallet top-ups, order payments and any operations-approved refunds will appear here.")
+                EmptyState("💳", "No wallet activity", "Refunds for eligible cancelled orders will appear here.")
             } else walletEntries.forEach { entry ->
                 Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(17.dp), modifier = Modifier.fillMaxWidth()) {
                     Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -958,7 +960,6 @@ private fun ActivityScreen(
                     }
                 }
             }
-            Text("Demo wallet only. Test credits are stored on this phone and have no cash value.", color = Muted, fontSize = 10.sp, lineHeight = 15.sp)
         }
         Spacer(Modifier.height(6.dp))
     }
