@@ -243,7 +243,7 @@ export function SpencersCustomerApp() {
         };
         if (!active) return;
         if (response.ok && result.ok && result.authenticated && result.customer) {
-          const nationalPhone = result.customer.phone.replace(/^\\+91/, "");
+          const nationalPhone = result.customer.phone.replace(/^\+91/, "");
           setData((current) => ({
             ...current,
             profile: { name: result.customer!.name, phone: nationalPhone, verified: true },
@@ -294,7 +294,7 @@ export function SpencersCustomerApp() {
     setData((current) => ({ ...current, quantities: { ...current.quantities, [product]: Math.max(0, Math.min(999, Math.floor(quantity))) } }));
   };
   const sendOtp = async () => {
-    const digits = phoneInput.replace(/\\D/g, "");
+    const digits = phoneInput.replace(/\D/g, "");
     if (digits.length !== 10) { setLoginError("Enter a valid 10-digit Indian mobile number."); return; }
     if (nameInput.trim().length < 2) { setLoginError("Enter your name to continue."); return; }
     setPhoneInput(digits);
@@ -338,7 +338,7 @@ export function SpencersCustomerApp() {
       if (!response.ok || !result.ok || !result.customer) {
         throw new Error(result.error || "We couldn't verify that code. Please try again.");
       }
-      const nationalPhone = result.customer.phone.replace(/^\\+91/, "");
+      const nationalPhone = result.customer.phone.replace(/^\+91/, "");
       setData((current) => ({
         ...current,
         profile: { name: result.customer!.name, phone: nationalPhone, verified: true },
@@ -448,15 +448,15 @@ export function SpencersCustomerApp() {
           {!otpSent ? (
             <div className="space-y-4">
               <Field label="Your name" value={nameInput} onChange={setNameInput} placeholder="Enter your name" />
-              <Field label="Mobile number" value={phoneInput} onChange={(value) => setPhoneInput(value.replace(/\\D/g, "").slice(0, 10))} type="tel" maxLength={10} placeholder="10-digit mobile number" />
-              <button type="button" disabled={authBusy || phoneInput.replace(/\\D/g, "").length !== 10 || nameInput.trim().length < 2} onClick={() => void sendOtp()} className="flex min-h-12 w-full items-center justify-center rounded-xl bg-brand px-4 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45">
+              <Field label="Mobile number" value={phoneInput} onChange={(value) => setPhoneInput(value.replace(/\D/g, "").slice(0, 10))} type="tel" maxLength={10} placeholder="10-digit mobile number" />
+              <button type="button" disabled={authBusy || phoneInput.replace(/\D/g, "").length !== 10 || nameInput.trim().length < 2} onClick={() => void sendOtp()} className="flex min-h-12 w-full items-center justify-center rounded-xl bg-brand px-4 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45">
                 {authBusy ? "Sending OTP..." : "Send OTP"}
               </button>
             </div>
           ) : (
             <div className="space-y-4">
               <p className="text-sm text-customer-muted">Enter the 6-digit code sent to <strong className="text-customer-ink">+91 {phoneInput}</strong>. It expires in 5 minutes.</p>
-              <Field label="One-time password" value={otpInput} onChange={(value) => setOtpInput(value.replace(/\\D/g, "").slice(0, 6))} type="text" maxLength={6} placeholder="6-digit OTP" />
+              <Field label="One-time password" value={otpInput} onChange={(value) => setOtpInput(value.replace(/\D/g, "").slice(0, 6))} type="text" maxLength={6} placeholder="6-digit OTP" />
               <button type="button" disabled={authBusy || otpInput.length !== 6} onClick={() => void verifyOtp()} className="flex min-h-12 w-full items-center justify-center rounded-xl bg-brand px-4 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45">
                 {authBusy ? "Verifying..." : "Verify and continue"}
               </button>
