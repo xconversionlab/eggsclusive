@@ -28,7 +28,6 @@ type AppData = {
   partnerRequests: { name: string; phone: string; area: string; note: string }[];
 };
 const STORAGE_KEY = "spencers-enterprises-customer-v1";
-const OTP_PREVIEW = "482913";
 const EMPTY: AppData = {
   profile: { name: "", phone: "", verified: false },
   addresses: [], activeAddressId: null,
@@ -195,6 +194,9 @@ function Field({
 export function SpencersCustomerApp() {
   const [data, setData] = useState<AppData>(EMPTY);
   const [hydrated, setHydrated] = useState(false);
+  const [sessionChecked, setSessionChecked] = useState(false);
+  const [authBusy, setAuthBusy] = useState(false);
+  const [resendIn, setResendIn] = useState(0);
   const [tab, setTab] = useState<Tab>("home");
   const [phoneInput, setPhoneInput] = useState("");
   const [nameInput, setNameInput] = useState("");
@@ -215,7 +217,9 @@ export function SpencersCustomerApp() {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const saved = JSON.parse(raw) as Partial<AppData>;
-        setData({ ...EMPTY, ...saved, profile: { ...EMPTY.profile, ...saved.profile }, quantities: { ...EMPTY.quantities, ...saved.quantities } });
+        setData({ ...EMPTY, ...saved, profile: { ...EMPTY.profile, ...saved.profile, verified: false }, quantities: { ...EMPTY.quantities, ...saved.quantities } });
+        setNameInput(saved.profile?.name ?? "");
+        setPhoneInput(saved.profile?.phone ?? "");
       }
     } catch {
       localStorage.removeItem(STORAGE_KEY);
@@ -224,8 +228,59 @@ export function SpencersCustomerApp() {
   }, []);
 
   useEffect(() => {
-    if (hydrated) localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  }, [data, hydrated]);
+    if (!hydrated) return;
+    let active = true;
+    const restoreSession = async () => {
+      try {
+        const response = await fetch("/api/customer-auth/session", {
+          credentials: "same-origin",
+          cache: "no-store",
+        });
+        const result = await response.json() as {
+          ok?: boolean;
+          authenticated?: boolean;
+          customer?: { id: string; name: string; phone: string };
+        };
+        if (!active) return;
+        if (response.ok && result.ok && result.authenticated && result.customer) {
+          const nationalPhone = result.customer.phone.replace(/^\\+91/, "");
+          setData((current) => ({
+            ...current,
+            profile: { name: result.customer!.name, phone: nationalPhone, verified: true },
+          }));
+          setNameInput(result.customer.name);
+          setPhoneInput(nationalPhone);
+        } else {
+          setData((current) => ({
+            ...current,
+            profile: { ...current.profile, verified: false },
+          }));
+        }
+      } catch {
+        if (active) {
+          setData((current) => ({
+            ...current,
+            profile: { ...current.profile, verified: false },
+          }));
+          setLoginError("We couldn't check your sign-in. Please refresh and try again.");
+        }
+      } finally {
+        if (active) setSessionChecked(true);
+      }
+    };
+    void restoreSession();
+    return () => { active = false; };
+  }, [hydrated]);
+
+  useEffect(() => {
+    if (hydrated && sessionChecked) localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  }, [data, hydrated, sessionChecked]);
+
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const timer = window.setTimeout(() => setResendIn((value) => Math.max(0, value - 1)), 1000);
+    return () => window.clearTimeout(timer);
+  }, [resendIn]);
 
   const activeAddress = data.addresses.find((a) => a.id === data.activeAddressId) ?? data.addresses[0] ?? null;
   const waterDeposit = data.noEmptyBottles ? data.quantities.water * PRICE.bottle : 0;
@@ -238,18 +293,91 @@ export function SpencersCustomerApp() {
   const setQuantity = (product: ProductKey, quantity: number) => {
     setData((current) => ({ ...current, quantities: { ...current.quantities, [product]: Math.max(0, Math.min(999, Math.floor(quantity))) } }));
   };
-  const sendOtp = () => {
-    const digits = phoneInput.replace(/\D/g, "");
-    if (digits.length !== 10) { setLoginError("Enter a valid 10-digit mobile number."); return; }
+  const sendOtp = async () => {
+    const digits = phoneInput.replace(/\\D/g, "");
+    if (digits.length !== 10) { setLoginError("Enter a valid 10-digit Indian mobile number."); return; }
+    if (nameInput.trim().length < 2) { setLoginError("Enter your name to continue."); return; }
     setPhoneInput(digits);
     setLoginError("");
-    setOtpSent(true);
+    setAuthBusy(true);
+    try {
+      const response = await fetch("/api/customer-auth/request-otp", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: digits }),
+      });
+      const result = await response.json() as { ok?: boolean; error?: string; resendAfterSeconds?: number };
+      if (!response.ok || !result.ok) throw new Error(result.error || "We couldn't send the OTP. Please try again.");
+      setOtpInput("");
+      setOtpSent(true);
+      setResendIn(result.resendAfterSeconds ?? 60);
+    } catch (error) {
+      setLoginError(error instanceof Error ? error.message : "We couldn't send the OTP. Please try again.");
+    } finally {
+      setAuthBusy(false);
+    }
   };
-  const verifyOtp = () => {
-    if (otpInput.trim() !== OTP_PREVIEW) { setLoginError("Incorrect OTP. Check the demo code shown below."); return; }
-    setData((current) => ({ ...current, profile: { name: nameInput.trim() || current.profile.name || "Customer", phone: phoneInput, verified: true } }));
+
+  const verifyOtp = async () => {
+    if (otpInput.trim().length !== 6) { setLoginError("Enter the 6-digit OTP sent to your mobile."); return; }
+    if (nameInput.trim().length < 2) { setLoginError("Enter your name to continue."); return; }
     setLoginError("");
+    setAuthBusy(true);
+    try {
+      const response = await fetch("/api/customer-auth/verify-otp", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: phoneInput, code: otpInput.trim(), name: nameInput.trim() }),
+      });
+      const result = await response.json() as {
+        ok?: boolean; error?: string;
+        customer?: { id: string; name: string; phone: string };
+      };
+      if (!response.ok || !result.ok || !result.customer) {
+        throw new Error(result.error || "We couldn't verify that code. Please try again.");
+      }
+      const nationalPhone = result.customer.phone.replace(/^\\+91/, "");
+      setData((current) => ({
+        ...current,
+        profile: { name: result.customer!.name, phone: nationalPhone, verified: true },
+      }));
+      setNameInput(result.customer.name);
+      setPhoneInput(nationalPhone);
+      setOtpSent(false);
+      setOtpInput("");
+      setLoginError("");
+    } catch (error) {
+      setLoginError(error instanceof Error ? error.message : "We couldn't verify that code. Please try again.");
+    } finally {
+      setAuthBusy(false);
+    }
   };
+
+  const logout = async () => {
+    setAuthBusy(true);
+    try {
+      await fetch("/api/customer-auth/logout", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+    } finally {
+      setData((current) => ({
+        ...current,
+        profile: { ...current.profile, verified: false },
+      }));
+      setOtpSent(false);
+      setOtpInput("");
+      setResendIn(0);
+      setLoginError("");
+      setTab("home");
+      setAuthBusy(false);
+    }
+  };
+
   const saveAddress = () => {
     if (data.addresses.length >= 4) { setNotice("You can save up to 4 addresses."); return; }
     if (!addressForm.label.trim() || !addressForm.recipient.trim() || !addressForm.line1.trim() || !addressForm.city.trim() || !/^\d{6}$/.test(addressForm.pincode)) {
@@ -302,7 +430,7 @@ export function SpencersCustomerApp() {
     setNotice("Your enquiry is saved here. WhatsApp opened with the details ready to share with Spencer's team.");
   };
 
-  if (!hydrated) {
+  if (!hydrated || !sessionChecked) {
     return <div className="grid min-h-screen place-items-center bg-customer"><div className="animate-pulse text-sm font-medium text-brand-dark">Spencer's Enterprises</div></div>;
   }
   if (!data.profile.verified) {
@@ -320,18 +448,26 @@ export function SpencersCustomerApp() {
           {!otpSent ? (
             <div className="space-y-4">
               <Field label="Your name" value={nameInput} onChange={setNameInput} placeholder="Enter your name" />
-              <Field label="Mobile number" value={phoneInput} onChange={setPhoneInput} type="tel" maxLength={10} placeholder="10-digit mobile number" />
-              <button type="button" onClick={sendOtp} className="flex min-h-12 w-full items-center justify-center rounded-xl bg-brand px-4 font-semibold text-white">Send OTP</button>
+              <Field label="Mobile number" value={phoneInput} onChange={(value) => setPhoneInput(value.replace(/\\D/g, "").slice(0, 10))} type="tel" maxLength={10} placeholder="10-digit mobile number" />
+              <button type="button" disabled={authBusy || phoneInput.replace(/\\D/g, "").length !== 10 || nameInput.trim().length < 2} onClick={() => void sendOtp()} className="flex min-h-12 w-full items-center justify-center rounded-xl bg-brand px-4 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45">
+                {authBusy ? "Sending OTP..." : "Send OTP"}
+              </button>
             </div>
           ) : (
             <div className="space-y-4">
-              <p className="text-sm text-customer-muted">Enter the 6-digit code for <strong className="text-customer-ink">+91 {phoneInput}</strong>.</p>
-              <Field label="One-time password" value={otpInput} onChange={setOtpInput} type="text" maxLength={6} placeholder="6-digit OTP" />
-              <button type="button" onClick={verifyOtp} className="flex min-h-12 w-full items-center justify-center rounded-xl bg-brand px-4 font-semibold text-white">Verify and continue</button>
-              <button type="button" onClick={() => { setOtpSent(false); setOtpInput(""); }} className="w-full py-2 text-sm font-medium text-brand">Change mobile number</button>
-              <p className="rounded-xl bg-amber-50 p-3 text-xs leading-relaxed text-amber-900">Preview OTP: <strong>{OTP_PREVIEW}</strong>. Live SMS delivery will be enabled when the SMS provider is connected.</p>
+              <p className="text-sm text-customer-muted">Enter the 6-digit code sent to <strong className="text-customer-ink">+91 {phoneInput}</strong>. It expires in 5 minutes.</p>
+              <Field label="One-time password" value={otpInput} onChange={(value) => setOtpInput(value.replace(/\\D/g, "").slice(0, 6))} type="text" maxLength={6} placeholder="6-digit OTP" />
+              <button type="button" disabled={authBusy || otpInput.length !== 6} onClick={() => void verifyOtp()} className="flex min-h-12 w-full items-center justify-center rounded-xl bg-brand px-4 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45">
+                {authBusy ? "Verifying..." : "Verify and continue"}
+              </button>
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <button type="button" onClick={() => { setOtpSent(false); setOtpInput(""); setResendIn(0); }} className="py-2 font-medium text-brand">Change mobile number</button>
+                <button type="button" disabled={authBusy || resendIn > 0} onClick={() => void sendOtp()} className="py-2 font-medium text-brand disabled:text-customer-muted">
+                  {resendIn > 0 ? `Resend in ${resendIn}s` : "Resend OTP"}
+                </button>
+              </div>
             </div>
-          )}
+          ) : null}
           {loginError ? <p role="alert" className="mt-3 text-sm text-red-700">{loginError}</p> : null}
           <div className="mt-6 flex items-center justify-center gap-2 text-xs text-customer-muted"><ShieldCheck size={14} />Your mobile number is used for order updates.</div>
         </section>
@@ -464,7 +600,7 @@ export function SpencersCustomerApp() {
         ) : null}
         {tab === "profile" ? (
           <section className="space-y-4">
-            <div className="flex items-center justify-between"><div><h2 className="text-2xl font-bold">Profile</h2><p className="mt-1 text-sm text-customer-muted">Your account and saved details</p></div><button type="button" onClick={() => setData((s) => ({ ...s, profile: { ...s.profile, verified: false } }))} className="flex items-center gap-1 rounded-lg px-2 py-2 text-xs font-semibold text-customer-muted"><LogOut size={15} />Log out</button></div>
+            <div className="flex items-center justify-between"><div><h2 className="text-2xl font-bold">Profile</h2><p className="mt-1 text-sm text-customer-muted">Your account and saved details</p></div><button type="button" onClick={() => void logout()} disabled={authBusy} className="flex items-center gap-1 rounded-lg px-2 py-2 text-xs font-semibold text-customer-muted disabled:opacity-50"><LogOut size={15} />Log out</button></div>
             <div className="rounded-2xl border border-customer-line bg-white p-4"><p className="font-semibold">{data.profile.name}</p><p className="mt-1 text-sm text-customer-muted">+91 {data.profile.phone}</p><p className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-emerald-700"><Check size={14} />Mobile verified</p></div>
             <div className="rounded-2xl border border-customer-line bg-white p-4">
               <div className="flex items-center justify-between"><div><h3 className="font-semibold">Saved addresses</h3><p className="mt-1 text-xs text-customer-muted">Save up to 4 places</p></div><span className="text-xs text-customer-muted">{data.addresses.length}/4</span></div>
