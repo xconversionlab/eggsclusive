@@ -8,11 +8,19 @@
   --color-line: #e4dccf;
   --color-foam: #efe7d8;
   --color-mark: #b86a12;
+  --color-customer: #f4f8fc;
+  --color-customer-ink: #142b40;
+  --color-customer-muted: #718397;
+  --color-customer-line: #e1eaf1;
+  --color-brand: #087dbb;
+  --color-brand-dark: #082f50;
+  --color-brand-pale: #e9f5fd;
   --font-display: "Fraunces", "Noto Sans Tamil", Georgia, serif;
   --font-sans: "Noto Sans", "Noto Sans Tamil", ui-sans-serif, system-ui, sans-serif;
   --radius-card: 1.75rem;
   --radius-control: 0.75rem;
   --shadow-panel: 0 18px 40px color-mix(in oklab, #1c1915 6%, transparent);
+  --shadow-card: 0 12px 30px rgb(8 47 80 / 6%);
 }
 
 @layer base {
