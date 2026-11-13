@@ -534,19 +534,24 @@ private fun SpencersApp() {
 private fun OrderScreen(
     profile: CustomerProfile,
     partner: DeliveryPartner?,
-    quantity: Int,
-    onQuantityChange: (Int) -> Unit,
-    payment: String,
-    onPaymentChange: (String) -> Unit,
-    walletBalance: Int,
+    selectedProductType: String,
+    onProductTypeChange: (String) -> Unit,
+    eggQuantity: Int,
+    onEggQuantityChange: (Int) -> Unit,
+    waterQuantity: Int,
+    onWaterQuantityChange: (Int) -> Unit,
+    noEmptyBottles: Boolean,
+    onNoEmptyBottlesChange: (Boolean) -> Unit,
     onPlaceOrder: () -> Unit,
     onOpenProfile: () -> Unit,
     onOpenMap: () -> Unit,
     onPartnerEnquiry: (String, String) -> Unit,
-    onProductEnquiry: (String) -> Unit,
 ) {
-    val unitPrice = partner?.pricePerEggPaise ?: PRICE_PER_EGG_PAISE
-    val total = quantity * unitPrice
+    val eggTotal = eggQuantity * PRICE_PER_EGG_PAISE
+    val waterTotal = waterQuantity * 3000
+    val bottleDeposit = if (noEmptyBottles) waterQuantity * 15000 else 0
+    val floorCharge = 0
+    val total = if (selectedProductType == "water_can") waterTotal + bottleDeposit + floorCharge else eggTotal
     var partnerDialog by rememberSaveable { mutableStateOf(false) }
     var partnerContactName by rememberSaveable { mutableStateOf("") }
     var partnerContactPhone by rememberSaveable { mutableStateOf("") }
@@ -576,68 +581,103 @@ private fun OrderScreen(
         }
 
         SectionHeading("Products Available", "Choose what you need")
-
         Card(
-            colors = CardDefaults.cardColors(containerColor = Color.White),
+            colors = CardDefaults.cardColors(containerColor = if (selectedProductType == "egg") PaleBlue else Color.White),
             shape = RoundedCornerShape(21.dp),
             elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().clickable { onProductTypeChange("egg") },
+            border = androidx.compose.foundation.BorderStroke(if (selectedProductType == "egg") 1.5.dp else 1.dp, if (selectedProductType == "egg") Blue else Line),
         ) {
-            Row(
-                Modifier.fillMaxWidth().padding(14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(13.dp),
-            ) {
-                Column(Modifier.width(76.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Box(Modifier.size(46.dp).clip(RoundedCornerShape(14.dp)).background(PaleBlue), contentAlignment = Alignment.Center) {
-                        Text("🥚", fontSize = 26.sp)
+            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(Modifier.width(70.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Box(Modifier.size(48.dp).clip(RoundedCornerShape(14.dp)).background(Color.White), contentAlignment = Alignment.Center) {
+                            Text("🥚", fontSize = 26.sp)
+                        }
+                        Text("Fresh Egg", color = Navy, fontWeight = FontWeight.Bold, fontSize = 9.sp)
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                        Text("−", color = if (quantity > 1) Navy else Muted, fontWeight = FontWeight.Black,
-                            modifier = Modifier.clickable(enabled = quantity > 1) { onQuantityChange(quantity - 1) })
-                        Text(quantity.toString(), fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = Navy)
-                        Text("+", color = if (partner != null && quantity < partner.stockEggs) Navy else Muted,
-                            fontWeight = FontWeight.Black,
-                            modifier = Modifier.clickable(enabled = partner != null && quantity < partner.stockEggs) { onQuantityChange(quantity + 1) })
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text("Fresh Egg", color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 17.sp)
+                        Text("₹7 per egg", color = Blue, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
-                    Text("Quantity", color = Muted, fontSize = 9.sp)
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(money(eggTotal), color = Navy, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
+                        Text("Line total", color = Muted, fontSize = 9.sp)
+                    }
                 }
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Text("Fresh Egg", color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 17.sp)
-                    Text(money(unitPrice) + " per egg", color = Blue, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                    Text("Select quantity below the product image.", color = Muted, fontSize = 10.sp)
+                Divider(color = Line)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Quantity", color = Navy, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(13.dp)) {
+                        RoundAction(Icons.Filled.Remove, "Decrease egg quantity", eggQuantity > 1) { onEggQuantityChange(eggQuantity - 1) }
+                        Text("$eggQuantity eggs", color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 13.sp)
+                        RoundAction(Icons.Filled.Add, "Increase egg quantity", eggQuantity < 360 && (partner == null || eggQuantity < partner.stockEggs)) { onEggQuantityChange(eggQuantity + 1) }
+                    }
                 }
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(money(total), color = Navy, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
-                    Text("Line total", color = Muted, fontSize = 9.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.fillMaxWidth()) {
+                    listOf(6, 12, 30, 60, 120).forEach { amount ->
+                        Surface(
+                            modifier = Modifier.weight(1f).clip(RoundedCornerShape(9.dp)).clickable { onEggQuantityChange(amount) },
+                            color = if (eggQuantity == amount) Blue else Color.White,
+                            shape = RoundedCornerShape(9.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, if (eggQuantity == amount) Blue else Line),
+                        ) {
+                            Box(Modifier.padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
+                                Text("$amount", color = if (eggQuantity == amount) Color.White else Navy, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
                 }
             }
         }
 
-        listOf(
-            Triple("Water Can", "🫗", "Price and can size to be confirmed"),
-            Triple("Milk", "🥛", "Price and pack size to be confirmed"),
-            Triple("Curd", "🥣", "Price and pack size to be confirmed"),
-        ).forEach { product ->
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                shape = RoundedCornerShape(18.dp),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Row(
-                    Modifier.fillMaxWidth().padding(13.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Box(Modifier.size(45.dp).clip(RoundedCornerShape(13.dp)).background(PaleBlue), contentAlignment = Alignment.Center) {
-                        Text(product.second, fontSize = 25.sp)
+        Card(
+            colors = CardDefaults.cardColors(containerColor = if (selectedProductType == "water_can") PaleBlue else Color.White),
+            shape = RoundedCornerShape(21.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+            modifier = Modifier.fillMaxWidth().clickable { onProductTypeChange("water_can") },
+            border = androidx.compose.foundation.BorderStroke(if (selectedProductType == "water_can") 1.5.dp else 1.dp, if (selectedProductType == "water_can") Blue else Line),
+        ) {
+            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(Modifier.width(70.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Image(
+                            painter = painterResource(id = R.drawable.water_can_icon),
+                            contentDescription = "20 litre water can",
+                            modifier = Modifier.size(55.dp),
+                            contentScale = ContentScale.Fit,
+                        )
+                        Text("20L Water Can", color = Navy, fontWeight = FontWeight.Bold, fontSize = 9.sp)
                     }
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(product.first, color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp)
-                        Text(product.third, color = Muted, fontSize = 10.sp)
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text("Water Can", color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 17.sp)
+                        Text("₹30 per can", color = Blue, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
-                    TextButton(onClick = { onProductEnquiry(product.first) }) { Text("Enquire", color = Blue, fontWeight = FontWeight.Bold) }
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(money(waterTotal + bottleDeposit), color = Navy, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
+                        Text("Line total", color = Muted, fontSize = 9.sp)
+                    }
                 }
+                Divider(color = Line)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Quantity", color = Navy, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(13.dp)) {
+                        RoundAction(Icons.Filled.Remove, "Decrease water can quantity", waterQuantity > 1) { onWaterQuantityChange(waterQuantity - 1) }
+                        Text("$waterQuantity cans", color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 13.sp)
+                        RoundAction(Icons.Filled.Add, "Increase water can quantity", waterQuantity < 30) { onWaterQuantityChange(waterQuantity + 1) }
+                    }
+                }
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(13.dp)).background(Color.White).padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Checkbox(checked = noEmptyBottles, onCheckedChange = onNoEmptyBottlesChange)
+                    Text("I don't have empty bottles to return", color = Ink, fontSize = 11.sp, lineHeight = 15.sp)
+                }
+                PriceRow("Water price", "₹30 × $waterQuantity can(s)", money(waterTotal))
+                PriceRow("Bottle price", "₹150 × \${if (noEmptyBottles) waterQuantity else 0} bottle(s)", money(bottleDeposit))
+                PriceRow("Floor delivery charge", "₹0 × 0 floors × $waterQuantity can(s)", money(floorCharge))
+                Text("Bottle deposit is added only when you cannot return empty bottles.", color = Muted, fontSize = 10.sp, lineHeight = 14.sp)
             }
         }
 
@@ -680,18 +720,27 @@ private fun OrderScreen(
             }
         }
 
-        SectionHeading("Payment method", "Cash on delivery is not available")
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            SelectableRow("UPI · demo", "Demo checkout only. No money is transferred.", payment == "UPI · demo") { onPaymentChange("UPI · demo") }
-            SelectableRow("Wallet", "Available balance: " + money(walletBalance), payment == "Wallet", walletBalance >= total) { onPaymentChange("Wallet") }
-        }
-
         Card(colors = CardDefaults.cardColors(containerColor = Navy), shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(17.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("ORDER SUMMARY", color = Color(0xFF8DCFFF), fontWeight = FontWeight.ExtraBold, fontSize = 10.sp, letterSpacing = 1.4.sp)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Fresh Egg × $quantity", color = Color.White, fontSize = 13.sp, modifier = Modifier.weight(1f))
-                    Text(money(total), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                if (selectedProductType == "water_can") {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Water Can × $waterQuantity", color = Color.White, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                        Text(money(waterTotal), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Bottle deposit", color = Color.White.copy(alpha = .78f), fontSize = 12.sp, modifier = Modifier.weight(1f))
+                        Text(money(bottleDeposit), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Floor delivery charge", color = Color.White.copy(alpha = .78f), fontSize = 12.sp, modifier = Modifier.weight(1f))
+                        Text(money(floorCharge), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    }
+                } else {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Fresh Egg × $eggQuantity", color = Color.White, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                        Text(money(eggTotal), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    }
                 }
                 Divider(color = Color.White.copy(alpha = .22f))
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -702,8 +751,7 @@ private fun OrderScreen(
         }
         Button(
             onClick = onPlaceOrder,
-            enabled = partner != null && profile.isReady && quantity <= (partner?.stockEggs ?: 0) &&
-                (payment != "Wallet" || walletBalance >= total),
+            enabled = partner != null && profile.isReady,
             modifier = Modifier.fillMaxWidth().height(55.dp),
             shape = RoundedCornerShape(17.dp),
             colors = ButtonDefaults.buttonColors(containerColor = Navy),
@@ -714,10 +762,7 @@ private fun OrderScreen(
         if (partner == null) {
             Text("Ordering is not available for the selected map location yet.", color = Color(0xFF9A3412), fontSize = 11.sp)
         }
-        Text(
-            "Demo app: order and wallet data are stored on this phone. Live SMS, shared status updates and online payment are not connected.",
-            Modifier.fillMaxWidth().padding(bottom = 8.dp), color = Muted, fontSize = 10.sp, lineHeight = 15.sp,
-        )
+        Text("Payment processing will be shown once the business payment gateway is connected.", color = Muted, fontSize = 10.sp, lineHeight = 15.sp)
     }
 
     if (partnerDialog) {
@@ -744,6 +789,17 @@ private fun OrderScreen(
             },
             dismissButton = { TextButton(onClick = { partnerDialog = false }) { Text("No, thanks") } },
         )
+    }
+}
+
+@Composable
+private fun PriceRow(title: String, detail: String, price: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(title, color = Navy, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+            Text(detail, color = Muted, fontSize = 10.sp)
+        }
+        Text(price, color = Navy, fontSize = 12.sp, fontWeight = FontWeight.Bold)
     }
 }
 
