@@ -264,17 +264,14 @@ private fun SpencersApp() {
             scope.launch { snackbar.showSnackbar("Delivery is not available at this map location yet.") }
             return
         }
-        if (quantity > partner.stockEggs) {
-            scope.launch { snackbar.showSnackbar("Only ${partner.stockEggs} eggs are currently available from ${partner.shopName}.") }
+        val orderQuantity = if (selectedProductType == "water_can") waterQuantity else eggQuantity
+        if (selectedProductType == "egg" && orderQuantity > partner.stockEggs) {
+            scope.launch { snackbar.showSnackbar("Only \${partner.stockEggs} eggs are currently available from \${partner.shopName}.") }
             return
         }
-        val estimatedTotal = quantity * partner.pricePerEggPaise
-        if (payment == "Wallet" && walletBalance < estimatedTotal) {
-            tab = MainTab.Status
-            historyPage = "wallet"
-            scope.launch { snackbar.showSnackbar("Your wallet balance is not enough. Choose UPI demo or add demo wallet funds.") }
-            return
-        }
+        val unitPrice = if (selectedProductType == "water_can") 3000 else partner.pricePerEggPaise
+        val bottleDeposit = if (selectedProductType == "water_can" && noEmptyBottles) orderQuantity * 15000 else 0
+        val estimatedTotal = (orderQuantity * unitPrice) + bottleDeposit
 
         placingOrder = true
         scope.launch {
@@ -290,8 +287,10 @@ private fun SpencersApp() {
                     .put("latitude", profile.latitude)
                     .put("longitude", profile.longitude)
                 val requestBody = JSONObject()
-                    .put("quantity", quantity)
-                    .put("payment", payment)
+                    .put("productType", selectedProductType)
+                    .put("quantity", orderQuantity)
+                    .put("emptyBottlesToReturn", !noEmptyBottles)
+                    .put("floorCount", 0)
                     .put("address", addressJson)
                 val response = withContext(Dispatchers.IO) {
                     nativeApiRequest("/api/native/orders", "POST", requestBody, sessionToken)
@@ -304,9 +303,9 @@ private fun SpencersApp() {
                 val placed = CustomerOrder(
                     id = orderId,
                     createdAt = now,
-                    quantity = remote.optInt("quantity", quantity),
+                    quantity = remote.optInt("quantity", orderQuantity),
                     slot = "",
-                    payment = remote.optString("payment", payment),
+                    payment = remote.optString("payment", "Payment pending"),
                     totalPaise = total,
                     status = "Order placed",
                     partnerName = remote.optString("partnerName"),
@@ -314,18 +313,15 @@ private fun SpencersApp() {
                     deliveryOtp = remote.optString("deliveryOtp"),
                     addressLabel = remote.optString("addressLabel", profile.addressLabel),
                     deliveryAddress = remote.optString("deliveryAddress", profile.address),
+                    productType = remote.optString("productType", selectedProductType),
+                    bottleDepositPaise = remote.optInt("bottleDepositPaise", bottleDeposit),
+                    floorCount = remote.optInt("floorCount", 0),
                 )
                 orders = listOf(placed) + orders.filterNot { it.id == orderId }
                 saveOrders(prefs, orders)
-                if (payment == "Wallet") {
-                    val next = walletBalance - total
-                    updateWallet(next, WalletTransaction("TX-" + orderId, now, "Payment for " + orderId, -total, next))
-                }
-                quantity = 12
-                payment = "UPI · demo"
                 tab = MainTab.Status
                 historyPage = "orders"
-                snackbar.showSnackbar("Order " + orderId + " placed. Your order is now saved to your account.")
+                snackbar.showSnackbar("Order " + orderId + " placed. Track updates in Activity.")
             } catch (error: Exception) {
                 snackbar.showSnackbar(error.message ?: "Could not place the order. Please try again.")
             } finally {
@@ -333,7 +329,6 @@ private fun SpencersApp() {
             }
         }
     }
-
     if (showSplash) {
         Box(
             Modifier.fillMaxSize().background(Navy),
@@ -416,6 +411,10 @@ private fun SpencersApp() {
                             deliveryOtp = item.optString("deliveryOtp"),
                             addressLabel = item.optString("addressLabel"),
                             deliveryAddress = item.optString("deliveryAddress"),
+                            productType = item.optString("productType", "egg"),
+                            bottleDepositPaise = item.optInt("bottleDepositPaise", 0),
+                            floorCount = item.optInt("floorCount", 0),
+                            refundApplied = item.optBoolean("refundApplied", false),
                         )
                     }
                     orders = synced
@@ -485,61 +484,50 @@ private fun SpencersApp() {
         ) { activeTab ->
             when (activeTab) {
                 MainTab.Order -> OrderScreen(
-                    profile, activePartner, quantity, { quantity = it.coerceIn(1, 360) },
-                    payment, { payment = it }, walletBalance, ::placeOrder,
+                    profile = profile,
+                    partner = activePartner,
+                    selectedProductType = selectedProductType,
+                    onProductTypeChange = { selectedProductType = it },
+                    eggQuantity = eggQuantity,
+                    onEggQuantityChange = { eggQuantity = it.coerceIn(1, 360) },
+                    waterQuantity = waterQuantity,
+                    onWaterQuantityChange = { waterQuantity = it.coerceIn(1, 30) },
+                    noEmptyBottles = noEmptyBottles,
+                    onNoEmptyBottlesChange = { noEmptyBottles = it },
+                    onPlaceOrder = ::placeOrder,
                     onOpenProfile = { tab = MainTab.Profile },
                     onOpenMap = { tab = MainTab.Profile; showMap = true },
                     onPartnerEnquiry = { name, phone ->
                         shareMessage(context, "Partner with Spencer's Enterprises", "I would like to partner with Spencer's Enterprises.\nName: " + name + "\nPhone: " + phone)
                     },
-                    onProductEnquiry = { product -> shareMessage(context, "Product price enquiry", "Please share availability and price for: " + product) },
                 )
-                MainTab.Status -> ActivityScreen(historyPage, { historyPage = it }, orders, walletBalance, walletEntries, { showTopUp = true })
+                MainTab.Status -> ActivityScreen(historyPage, { historyPage = it }, orders, walletBalance, walletEntries)
                 MainTab.Profile -> ProfileScreen(
                     profile, { profile = it },
                     { saveProfile(profile); scope.launch { snackbar.showSnackbar("Profile and saved addresses updated on this device.") } },
                     { showMap = true },
                     onComplaint = { complaint ->
-                        val ticketId = "SPC-" + SimpleDateFormat("yyMMdd-HHmmss", Locale.US).format(Date())
-                        val tickets = JSONArray(prefs.getString("support_tickets", "[]"))
-                        tickets.put(JSONObject().apply {
-                            put("id", ticketId); put("createdAt", System.currentTimeMillis())
-                            put("customer", profile.name); put("phone", profile.phone)
-                            put("message", complaint); put("status", "Ready to share")
-                        })
-                        prefs.edit().putString("support_tickets", tickets.toString()).apply()
-                        shareMessage(
-                            context, "Customer complaint $ticketId",
-                            "Ticket: $ticketId\nCustomer: " + profile.name + "\nPhone: " + profile.phone + "\nComplaint: " + complaint,
-                        )
-                    },
+                        scope.launch {
+                            try {
+                                val result = withContext(Dispatchers.IO) {
+                                    nativeApiRequest(
+                                        "/api/native/complaints",
+                                        "POST",
+                                        JSONObject().put("message", complaint),
+                                        sessionToken,
+                                    )
+                                }
+                                snackbar.showSnackbar("Support ticket " + result.optString("ticketId") + " submitted.")
+                            } catch (error: Exception) {
+                                snackbar.showSnackbar(error.message ?: "Could not submit your complaint. Please try again.")
+                            }
+                        }
+                    }
                 )
             }
         }
     }
 
-    if (showTopUp) {
-        AlertDialog(
-            onDismissRequest = { showTopUp = false },
-            title = { Text("Add money to wallet") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                    Text("Choose a test amount. Demo funds stay on this phone; no real payment is collected.", color = Muted, fontSize = 13.sp)
-                    listOf(100, 500, 1000).forEach { rupees ->
-                        OutlinedButton(onClick = {
-                            val amount = rupees * 100
-                            val next = walletBalance + amount
-                            val now = System.currentTimeMillis()
-                            updateWallet(next, WalletTransaction("TX-" + now, now, "Demo wallet top-up", amount, next))
-                            showTopUp = false
-                            scope.launch { snackbar.showSnackbar("₹" + rupees + " demo balance added.") }
-                        }, modifier = Modifier.fillMaxWidth()) { Text("Add ₹" + rupees + " demo balance") }
-                    }
-                }
-            },
-            confirmButton = { TextButton(onClick = { showTopUp = false }) { Text("Close") } },
-        )
-    }
 }
 
 @Composable
