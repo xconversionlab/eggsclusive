@@ -431,6 +431,48 @@ export async function listOperationsNativeOrders(request: Request) {
   };
 }
 
+export async function getNativeWallet(request: Request) {
+  requirePersistentDatabase();
+  const customer = await authenticateNativeRequest(request);
+  if (!customer) return { ok: false as const, status: 401, error: "Please log in again." };
+  const sql = await getSql();
+  const wallet = await sql.query<{ balance_paise: number }>(
+    "select balance_paise from native_customer_wallets where customer_id = $1 limit 1",
+    [customer.id],
+  );
+  const transactions = await sql.query<Row>(
+    \`select id, order_id, transaction_type, amount_paise, balance_after_paise, description, created_at
+       from native_wallet_transactions where customer_id = $1 order by created_at desc limit 100\`,
+    [customer.id],
+  );
+  return {
+    ok: true as const,
+    balancePaise: Number(wallet[0]?.balance_paise ?? 0),
+    transactions: transactions.map((row) => ({
+      id: row.id,
+      orderId: row.order_id,
+      type: row.transaction_type,
+      amountPaise: Number(row.amount_paise),
+      balanceAfterPaise: Number(row.balance_after_paise),
+      description: row.description,
+      createdAt: new Date(String(row.created_at)).getTime(),
+    })),
+  };
+}
+
+export async function listOperationsNativeComplaints(request: Request) {
+  requirePersistentDatabase();
+  if (!isOperationsRequest(request)) {
+    return { ok: false as const, status: 401, error: "Operations authorization failed." };
+  }
+  const sql = await getSql();
+  const rows = await sql.query<Row>(
+    \`select id, customer_name, customer_phone, message, status, created_at, updated_at
+       from native_complaints order by created_at desc limit 250\`,
+  );
+  return { ok: true as const, complaints: rows };
+}
+
 export async function updateNativeOrderStatus(orderId: string, request: Request, body: unknown) {
   requirePersistentDatabase();
   if (!isOperationsRequest(request)) {
@@ -440,22 +482,55 @@ export async function updateNativeOrderStatus(orderId: string, request: Request,
   const value = body as Record<string, unknown>;
   const status = typeof value.status === "string" ? value.status : "";
   const allowed = new Set(["accepted", "preparing", "out_for_delivery", "delivered", "cancelled"]);
-  if (!allowed.has(status)) return { ok: false as const, status: 400, error: "Unsupported order status." };
+  if (!allowed.has(status)) return { ok: false as const, status: 400, error: "Unsupported status." };
   const sql = await getSql();
-  const current = await sql.query<{ status: string }>("select status from native_orders where id = $1 limit 1", [orderId]);
+  const current = await sql.query<{ status: string; payment_status: string; customer_id: string; total_paise: number }>(
+    "select status, payment_status, customer_id, total_paise from native_orders where id = $1 limit 1",
+    [orderId],
+  );
   if (!current[0]) return { ok: false as const, status: 404, error: "Order not found." };
+  if (current[0].status === "cancelled") {
+    return { ok: true as const, orderId, status: "cancelled", refundApplied: false, notification: "already_cancelled" };
+  }
+  if (current[0].status === "delivered") {
+    return { ok: false as const, status: 409, error: "A delivered order cannot be cancelled or moved backwards." };
+  }
   const note = typeof value.note === "string" ? value.note.trim().slice(0, 240) : "";
-  await sql.query(
-    "update native_orders set status = $2, updated_at = now(), status_changed_at = now() where id = $1",
+  const updated = await sql.query<{ customer_phone: string }>(
+    \`update native_orders
+        set status = $2, updated_at = now(), status_changed_at = now()
+      where id = $1 and status not in ('cancelled', 'delivered')
+      returning customer_phone\`,
     [orderId, status],
   );
+  if (!updated[0]) return { ok: false as const, status: 409, error: "Order status changed elsewhere. Refresh and try again." };
   await sql.query(
     "insert into native_order_events (id, order_id, from_status, to_status, note, actor) values ($1,$2,$3,$4,$5,'operations')",
     [randomUUID(), orderId, current[0].status, status, note],
   );
-  const recipient = await sql.query<{ phone: string }>("select customer_phone as phone from native_orders where id = $1", [orderId]);
-  const notification = recipient[0]
-    ? await dispatchOrderStatusSms(sql, orderId, recipient[0].phone, status)
-    : "not_configured";
-  return { ok: true as const, orderId, status, notification };
+
+  let refundApplied = false;
+  if (status === "cancelled" && current[0].payment_status === "paid") {
+    const wallet = await sql.query<{ balance_paise: number }>(
+      \`insert into native_customer_wallets (customer_id, balance_paise, updated_at)
+       values ($1,$2,now())
+       on conflict (customer_id) do update
+         set balance_paise = native_customer_wallets.balance_paise + excluded.balance_paise,
+             updated_at = now()
+       returning balance_paise\`,
+      [current[0].customer_id, Number(current[0].total_paise)],
+    );
+    const balance = Number(wallet[0]?.balance_paise ?? 0);
+    await sql.query(
+      \`insert into native_wallet_transactions
+        (id, customer_id, order_id, transaction_type, amount_paise, balance_after_paise, description)
+       values ($1,$2,$3,'refund',$4,$5,$6)
+       on conflict (order_id, transaction_type) do nothing\`,
+      [randomUUID(), current[0].customer_id, orderId, Number(current[0].total_paise), balance, "Refund for cancelled order " + orderId],
+    );
+    refundApplied = true;
+  }
+
+  const notification = await dispatchOrderStatusSms(sql, orderId, updated[0].customer_phone, status);
+  return { ok: true as const, orderId, status, refundApplied, notification };
 }
