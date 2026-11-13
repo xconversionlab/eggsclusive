@@ -4,7 +4,6 @@ import {
   customerAuthJson,
   customerSessionCookie,
   getCustomerSession,
-  isCustomerAuthConfigured,
   requestCustomerOtp,
   revokeCustomerSession,
   verifyCustomerOtp,
@@ -17,8 +16,8 @@ export const Route = createFileRoute("/api/customer-auth")({
         try {
           const customer = await getCustomerSession(request);
           return customer
-            ? customerAuthJson({ ok: true, customer })
-            : customerAuthJson({ ok: false, error: "Please verify your mobile number." }, 401);
+            ? customerAuthJson({ ok: true, authenticated: true, customer })
+            : customerAuthJson({ ok: false, authenticated: false, error: "Please verify your mobile number." }, 401);
         } catch {
           return customerAuthJson({ ok: false, error: "Customer authentication is temporarily unavailable." }, 503);
         }
