@@ -87,6 +87,121 @@ function assertSameOrigin(request: Request) {
   }
 }
 
+type SmsSendResult =
+  | { ok: true }
+  | { ok: false; status: number; error: string };
+
+async function sendOtpWithTwilio(phone: string, otp: string): Promise<SmsSendResult> {
+  const accountSid = env("TWILIO_ACCOUNT_SID");
+  const apiKeySid = env("TWILIO_API_KEY_SID");
+  const apiKeySecret = env("TWILIO_API_KEY_SECRET");
+  const messagingServiceSid = env("TWILIO_MESSAGING_SERVICE_SID");
+  const fromNumber = env("TWILIO_FROM_NUMBER");
+
+  if (!accountSid || !apiKeySid || !apiKeySecret || (!messagingServiceSid && !fromNumber)) {
+    return {
+      ok: false,
+      status: 503,
+      error: "Twilio is not fully configured. Add its Account SID, API key, secret and sender or Messaging Service SID in Vercel.",
+    };
+  }
+  if (!/^AC[a-f0-9]{32}$/i.test(accountSid) || !/^SK[a-f0-9]{32}$/i.test(apiKeySid)) {
+    return { ok: false, status: 503, error: "Twilio account or API key SID is not in the expected format." };
+  }
+  if (!messagingServiceSid && !/^\+[1-9]\d{7,14}$/.test(fromNumber ?? "")) {
+    return { ok: false, status: 503, error: "TWILIO_FROM_NUMBER must be an E.164 number, including its +country code." };
+  }
+
+  const form = new URLSearchParams({
+    To: phone,
+    Body: `Your Spencer's Enterprises verification code is ${otp}. It expires in 5 minutes. Do not share this code.`,
+  });
+  if (messagingServiceSid) form.set("MessagingServiceSid", messagingServiceSid);
+  else form.set("From", fromNumber as string);
+
+  let response: Response;
+  try {
+    response = await fetch(
+      `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: "Basic " + Buffer.from(`${apiKeySid}:${apiKeySecret}`).toString("base64"),
+          "Content-Type": "application/x-www-form-urlencoded",
+          Accept: "application/json",
+        },
+        body: form.toString(),
+        signal: AbortSignal.timeout(12000),
+      },
+    );
+  } catch {
+    return { ok: false, status: 502, error: "Twilio could not be reached. Please try again." };
+  }
+
+  const body = await response.json().catch(() => ({})) as {
+    sid?: string;
+    status?: string;
+    code?: number;
+    message?: string;
+  };
+  if (!response.ok || !body.sid) {
+    // Keep provider diagnostics in server logs without returning account details to the browser.
+    console.error("[customer-otp] Twilio rejected SMS", {
+      httpStatus: response.status,
+      code: body.code ?? null,
+      message: body.message?.slice(0, 240) ?? null,
+    });
+    if (body.code === 21608 || body.code === 14111) {
+      return {
+        ok: false,
+        status: 403,
+        error: "This Twilio trial can only send to verified recipient numbers. Verify this phone number in Twilio or upgrade the account.",
+      };
+    }
+    return {
+      ok: false,
+      status: 502,
+      error: "Twilio did not accept the OTP message. Check the sender, trial restrictions and India SMS configuration.",
+    };
+  }
+  return { ok: true };
+}
+
+async function sendOtpWithTwoFactor(phone: string, otp: string): Promise<SmsSendResult> {
+  const apiKey = env("TWOFACTOR_API_KEY");
+  const templateName = env("TWOFACTOR_OTP_TEMPLATE_NAME");
+  if (!apiKey || !templateName) {
+    return { ok: false, status: 503, error: "2Factor is not configured. Add its API key and approved OTP template name in Vercel." };
+  }
+
+  let response: Response;
+  try {
+    response = await fetch("https://2factor.in/API/V1/OTP/SEND", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        accept: "application/json",
+        "X-API-Key": apiKey,
+      },
+      body: JSON.stringify({ to: phone, template_name: templateName, var1: otp }),
+      signal: AbortSignal.timeout(12000),
+    });
+  } catch {
+    return { ok: false, status: 502, error: "2Factor could not be reached. Please try again." };
+  }
+
+  const body = await response.json().catch(() => ({})) as {
+    status?: string; type?: string; Status?: string; session_id?: string;
+  };
+  const providerStatus = String(body.status ?? body.type ?? body.Status ?? "").toLowerCase();
+  const accepted = response.ok && (
+    ["sent", "success", "submitted"].includes(providerStatus) || Boolean(body.session_id)
+  );
+  return accepted
+    ? { ok: true }
+    : { ok: false, status: 502, error: "2Factor did not accept the OTP message. Check its approved template and account." };
+}
+
 export async function requestCustomerOtp(phoneInput: unknown, requesterInput: unknown) {
   requirePersistentDatabase();
   const phone = normalizeIndianPhone(phoneInput);
@@ -94,12 +209,6 @@ export async function requestCustomerOtp(phoneInput: unknown, requesterInput: un
 
   // Fail before contacting the SMS provider if the OTP/session signing secret is absent.
   authSecret();
-  const apiKey = env("TWOFACTOR_API_KEY");
-  const templateName = env("TWOFACTOR_OTP_TEMPLATE_NAME");
-  if (!apiKey || !templateName) {
-    return { ok: false as const, status: 503, error: "SMS delivery is not configured yet. Please contact the store." };
-  }
-
   const requester = typeof requesterInput === "string" && requesterInput.trim()
     ? requesterInput.trim().slice(0, 160)
     : "unknown";
@@ -126,32 +235,14 @@ export async function requestCustomerOtp(phoneInput: unknown, requesterInput: un
   }
 
   const otp = String(randomInt(100000, 1000000));
-  let providerResponse: Response;
-  try {
-    providerResponse = await fetch("https://2factor.in/API/V1/OTP/SEND", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        accept: "application/json",
-        "X-API-Key": apiKey,
-      },
-      body: JSON.stringify({ to: phone, template_name: templateName, var1: otp }),
-      signal: AbortSignal.timeout(12000),
-    });
-  } catch {
-    return { ok: false as const, status: 502, error: "SMS provider could not be reached. Please try again." };
-  }
+  const provider = (env("SMS_PROVIDER") ?? "2factor").toLowerCase();
+  const delivery = provider === "twilio"
+    ? await sendOtpWithTwilio(phone, otp)
+    : provider === "2factor"
+      ? await sendOtpWithTwoFactor(phone, otp)
+      : { ok: false as const, status: 503, error: "Unsupported SMS_PROVIDER. Use 'twilio' or '2factor'." };
 
-  const providerBody = await providerResponse.json().catch(() => ({})) as {
-    status?: string; type?: string; Status?: string; session_id?: string;
-  };
-  const providerStatus = String(providerBody.status ?? providerBody.type ?? providerBody.Status ?? "").toLowerCase();
-  const accepted = providerResponse.ok && (
-    ["sent", "success", "submitted"].includes(providerStatus) || Boolean(providerBody.session_id)
-  );
-  if (!accepted) {
-    return { ok: false as const, status: 502, error: "SMS was not accepted. Check your approved OTP template and provider account." };
-  }
+  if (!delivery.ok) return delivery;
 
   await sql.query(
     "insert into native_otp_challenges (id, phone, requester_hash, otp_hash, expires_at) values ($1, $2, $3, $4, now() + interval '5 minutes')",
@@ -159,7 +250,6 @@ export async function requestCustomerOtp(phoneInput: unknown, requesterInput: un
   );
   return { ok: true as const, phone, expiresInSeconds: OTP_TTL_SECONDS, resendAfterSeconds: OTP_RESEND_SECONDS };
 }
-
 export async function verifyCustomerOtp(phoneInput: unknown, codeInput: unknown, nameInput: unknown) {
   requirePersistentDatabase();
   const phone = normalizeIndianPhone(phoneInput);
