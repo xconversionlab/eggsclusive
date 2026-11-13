@@ -1,9 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
 import {
   apiJson,
+  createNativeComplaint,
   createNativeOrder,
+  getNativeWallet,
+  listNativeCustomerAddresses,
   listNativeOrders,
+  listOperationsNativeComplaints,
   listOperationsNativeOrders,
+  saveNativeCustomerAddresses,
   requestPhoneOtp,
   updateNativeOrderStatus,
   verifyPhoneOtp,
@@ -26,6 +31,18 @@ export const Route = createFileRoute("/api/native/$")({
           }
           if (pathname === "/api/native/orders") {
             const result = await listNativeOrders(request);
+            return result.ok ? apiJson(result) : apiJson({ ok: false, error: result.error }, result.status);
+          }
+          if (pathname === "/api/native/addresses") {
+            const result = await listNativeCustomerAddresses(request);
+            return result.ok ? apiJson(result) : apiJson({ ok: false, error: result.error }, result.status);
+          }
+          if (pathname === "/api/native/wallet") {
+            const result = await getNativeWallet(request);
+            return result.ok ? apiJson(result) : apiJson({ ok: false, error: result.error }, result.status);
+          }
+          if (pathname === "/api/native/ops/complaints") {
+            const result = await listOperationsNativeComplaints(request);
             return result.ok ? apiJson(result) : apiJson({ ok: false, error: result.error }, result.status);
           }
           if (pathname === "/api/native/ops/orders") {
@@ -63,6 +80,19 @@ export const Route = createFileRoute("/api/native/$")({
           if (pathname === "/api/native/auth/verify-otp") {
             const value = body as Record<string, unknown>;
             const result = await verifyPhoneOtp(value?.phone, value?.code, value?.name);
+            return result.ok
+              ? apiJson(result)
+              : apiJson({ ok: false, error: result.error }, result.status);
+          }
+
+          if (pathname === "/api/native/complaints") {
+            const result = await createNativeComplaint(request, body);
+            return result.ok
+              ? apiJson(result, 201)
+              : apiJson({ ok: false, error: result.error }, result.status);
+          }
+          if (pathname === "/api/native/addresses") {
+            const result = await saveNativeCustomerAddresses(request, body);
             return result.ok
               ? apiJson(result)
               : apiJson({ ok: false, error: result.error }, result.status);
