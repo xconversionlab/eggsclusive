@@ -275,7 +275,7 @@ private fun SpencersApp() {
         }
         val orderQuantity = if (selectedProductType == "water_can") waterQuantity else eggQuantity
         if (selectedProductType == "egg" && orderQuantity > partner.stockEggs) {
-            scope.launch { snackbar.showSnackbar("Only \${partner.stockEggs} eggs are currently available from \${partner.shopName}.") }
+            scope.launch { snackbar.showSnackbar("Only ${partner.stockEggs} eggs are currently available from ${partner.shopName}.") }
             return
         }
         val unitPrice = if (selectedProductType == "water_can") 3000 else partner.pricePerEggPaise
@@ -746,7 +746,7 @@ private fun OrderScreen(
                     Text("I don't have empty bottles to return", color = Ink, fontSize = 11.sp, lineHeight = 15.sp)
                 }
                 PriceRow("Water price", "₹30 × $waterQuantity can(s)", money(waterTotal))
-                PriceRow("Bottle price", "₹150 × \${if (noEmptyBottles) waterQuantity else 0} bottle(s)", money(bottleDeposit))
+                PriceRow("Bottle price", "₹150 × ${if (noEmptyBottles) waterQuantity else 0} bottle(s)", money(bottleDeposit))
                 PriceRow("Floor delivery charge", "₹0 × 0 floors × $waterQuantity can(s)", money(floorCharge))
                 Text("Bottle deposit is added only when you cannot return empty bottles.", color = Muted, fontSize = 10.sp, lineHeight = 14.sp)
             }
@@ -937,7 +937,7 @@ private fun ActivityScreen(
                         Divider(color = Line)
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                (if (order.productType == "water_can") "Water Can" else "Fresh Egg") + " × \${order.quantity}",
+                                (if (order.productType == "water_can") "Water Can" else "Fresh Egg") + " × ${order.quantity}",
                                 color = Ink,
                                 fontSize = 12.sp,
                                 modifier = Modifier.weight(1f),
@@ -945,7 +945,7 @@ private fun ActivityScreen(
                             Text(money(order.totalPaise), color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
                         }
                         if (order.productType == "water_can" && order.bottleDepositPaise > 0) {
-                            Text("Bottle deposit included: \${money(order.bottleDepositPaise)}", color = Muted, fontSize = 10.sp)
+                            Text("Bottle deposit included: ${money(order.bottleDepositPaise)}", color = Muted, fontSize = 10.sp)
                         }
                         if (cancelled) {
                             Text(
@@ -977,7 +977,7 @@ private fun ActivityScreen(
                                 Text("DELIVERY PARTNER", color = Blue, fontSize = 9.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.2.sp)
                                 Text(order.partnerName, color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp)
                                 if (order.partnerPhone.isNotBlank()) {
-                                    Text("Partner contact: +91 \${order.partnerPhone}", color = Muted, fontSize = 11.sp)
+                                    Text("Partner contact: +91 ${order.partnerPhone}", color = Muted, fontSize = 11.sp)
                                 }
                             } else {
                                 Text("Delivery partner: being assigned", color = Muted, fontSize = 11.sp)
