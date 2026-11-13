@@ -40,7 +40,7 @@ export const Route = createFileRoute("/api/customer-auth")({
 
         try {
           if (body.action === "request-otp") {
-            const result = await requestCustomerOtp(body.phone);
+            const result = await requestCustomerOtp(body.phone, request.headers.get("x-forwarded-for")?.split(",")[0] ?? request.headers.get("x-real-ip") ?? "unknown");
             return result.ok
               ? customerAuthJson(result)
               : customerAuthJson({ ok: false, error: result.error }, result.status);
