@@ -1,8 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
 import {
-  apiJson as _unused,
-} from "@/lib/native-api.server";
-import {
   clearCustomerSessionCookie,
   customerAuthJson,
   customerSessionCookie,
