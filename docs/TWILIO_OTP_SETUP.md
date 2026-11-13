@@ -1,63 +1,71 @@
-# Twilio SMS OTP setup for Eggsclusive
+# Twilio Verify SMS OTP setup for Eggsclusive
 
-The customer login supports two server-side delivery adapters. The default remains `2factor`; set `SMS_PROVIDER=twilio` to use Twilio Programmable Messaging. OTP creation, HMAC hashing, expiry, rate limits, verification and customer sessions remain in the app.
+Eggsclusive uses **Twilio Verify v2** for customer login OTP delivery and code validation. Twilio generates and validates the six-digit code; Eggsclusive never stores the raw OTP. The application retains its own request throttling, short-lived challenge record, customer upsert, and HttpOnly session cookie.
 
-## 1. Create Twilio credentials
+## Vercel environment variables
 
-In Twilio Console:
-
-1. Open **Settings → Account settings → API keys & auth tokens**.
-2. Create an API key named `Eggsclusive OTP` with type **Standard**.
-3. Copy the API Key SID and Secret immediately. Twilio displays the Secret only once.
-4. Keep your Account SID from the Twilio Console dashboard.
-5. Find your SMS-capable sender number in **Phone Numbers → Manage → Active numbers**. Copy it in E.164 format, such as `+1...` or `+91...`. If using a Messaging Service, copy its Messaging Service SID instead.
-
-Do not put credentials in source files, client-side variables, GitHub, screenshots or chat.
-
-## 2. Add Vercel environment variables
-
-Add these as server-only variables to the `eggsclusive-preview` Vercel project. Set the required scope to **Production** and **Preview** (and Development if you test a local deployment):
+Set these server-only environment variables for the Vercel project:
 
 | Variable | Value |
 | --- | --- |
-| `SMS_PROVIDER` | `twilio` |
-| `TWILIO_ACCOUNT_SID` | Account SID from the Twilio dashboard |
-| `TWILIO_API_KEY_SID` | Standard API key SID |
-| `TWILIO_API_KEY_SECRET` | Standard API key Secret (**Sensitive**) |
-| `TWILIO_FROM_NUMBER` | Twilio SMS-capable sender number in E.164 format |
+| `SMS_PROVIDER` | `twilio-verify` |
+| `TWILIO_ACCOUNT_SID` | Account SID from Twilio Console (`AC...`) |
+| `TWILIO_API_KEY_SID` | US1 API Key SID (`SK...`) |
+| `TWILIO_API_KEY_SECRET` | Secret for that API Key (**Sensitive**) |
+| `TWILIO_VERIFY_SERVICE_SID` | Verify Service SID (`VA...`) |
 
-Use either `TWILIO_FROM_NUMBER` **or** `TWILIO_MESSAGING_SERVICE_SID`. If both are set, the Messaging Service SID takes precedence. Keep `NATIVE_AUTH_SECRET` and `DATABASE_URL` configured; they are required by customer sessions and OTP storage.
+Keep `NATIVE_AUTH_SECRET` and `DATABASE_URL` configured. They are required for HMAC-based requester throttling and persistent customer sessions. Set the Twilio variables for Production and Preview if both environments are used. After changing variables, redeploy.
 
-After adding or changing environment variables, trigger a new deployment.
+**No `TWILIO_FROM_NUMBER` or Messaging Service SID is needed for Verify.** Twilio Verify handles the OTP sender and message body. The old Programmable Messaging adapter remains available if `SMS_PROVIDER=twilio`, but customer login should use `twilio-verify`.
 
-## 3. Trial account limitations
+## Create and scope the Twilio API key
 
-A Twilio trial can send only to verified recipient phone numbers (up to five per account), and trial message content is restricted to Twilio-provided templates. The trial is time-limited. Therefore a successful Console "Try it out" SMS is not sufficient to prove that the app's dynamic OTP body will be accepted.
+1. In Twilio Console, use the **United States (US1)** region.
+2. Create a Restricted API key, or edit an existing Restricted key.
+3. Enable only:
+   - Verify → Verification → Create (`twilio/verify/verification/create`)
+   - Verify → Verification Check → Create (`twilio/verify/verification-check/create`)
+4. Disable unrelated permissions, including Messaging, Billing, Voice and service-management permissions.
+5. Save the key SID and secret securely. Twilio displays the secret only once.
 
-For a genuine end-to-end app OTP test, use a verified recipient and check whether Twilio's current trial restrictions accept the app's custom OTP content. If the API rejects the content, upgrade the Twilio account before production testing. Do not try to evade trial restrictions.
+Twilio's Verify REST API uses HTTP Basic authentication with the API Key SID as username and the API Key Secret as password.
 
-## 4. India delivery routes
+## Create the Verify service
 
-Twilio documents two India routes:
+1. Open Twilio Console → Identity → Verify → Overview.
+2. Create or use the existing service named `Eggsclusive OTP`.
+3. Use SMS as the channel and a six-digit code.
+4. Copy its Service SID (`VA...`) to `TWILIO_VERIFY_SERVICE_SID`.
 
-- **International route:** no DLT registration is required; the mobile network may replace the sender with a random ILDO-approved short code.
-- **Domestic route:** company/entity and alphanumeric Sender ID registration in a telecom DLT portal are required before registering with Twilio. DLT-approved templates must be allowlisted.
+## How the app calls Verify
 
-Ask Twilio which route is provisioned for the account and the target Indian operator before launch. Do not assume a trial test message proves that all Indian carriers will deliver OTPs consistently.
+- Start: `POST https://verify.twilio.com/v2/Services/{ServiceSid}/Verifications` with `To=+91...` and `Channel=sms`.
+- Check: `POST https://verify.twilio.com/v2/Services/{ServiceSid}/VerificationCheck` with `To=+91...` and `Code=123456`.
+- Login is allowed only when Verify returns `status=approved` and `valid=true`.
 
-## 5. Test checklist
+Twilio Verify Service SID, Account SID and API credentials are only used by server routes. Never expose credentials in browser code or commit them to GitHub.
 
-1. Confirm the latest Vercel deployment is READY.
-2. Open the customer app in a private/incognito browser.
-3. Use a phone number verified in Twilio while the account is still on trial.
-4. Request one OTP. Do not repeatedly resend; the app enforces a 60-second cooldown and a per-phone hourly cap.
-5. Confirm the SMS arrives, enter the code, and verify that the customer session survives a page refresh.
-6. Inspect **Twilio Console → Monitor → Logs → Messaging** for message status and any error code if delivery fails.
-7. Test with other Indian carriers before launch; one successful recipient is not a deliverability guarantee.
+## Trial limitations
 
-## Provider switch / rollback
+Twilio trial Verify only sends to recipient phone numbers verified in the Twilio Console (up to five recipients per account). Trial messaging uses Twilio's fixed test template and does not allow a custom OTP message. Trial quota and daily limits apply. A successful Console test confirms the Verify service works for that verified number, but the production app must still be tested through its own login form.
 
-- Twilio: `SMS_PROVIDER=twilio`
-- Existing 2Factor adapter: `SMS_PROVIDER=2factor` (also the code default if the variable is absent)
+## Test checklist
 
-Switching provider changes only how the OTP is delivered. The app still verifies the generated OTP itself; it does not use Twilio Verify.
+1. Confirm the Vercel deployment is READY.
+2. Confirm `SMS_PROVIDER=twilio-verify` and all four `TWILIO_*` variables are configured.
+3. Confirm the Restricted API key has both Verify Create permissions above.
+4. Open the deployed Eggsclusive app in a private browser window.
+5. Request one OTP for a Twilio-verified test phone number.
+6. Enter the received six-digit code and verify that the app creates a customer session.
+7. Refresh the page and confirm the session is restored.
+8. Inspect Twilio Console → Identity → Verify → Logs if sending or code checking fails.
+
+The application enforces a 60-second resend cooldown, five requests per phone per hour, a requester/IP hourly limit, a five-minute local challenge window, and a maximum of five local attempts per challenge.
+
+## Provider selection / rollback
+
+- Twilio Verify: `SMS_PROVIDER=twilio-verify`
+- Twilio Programmable Messaging (custom app-generated OTP): `SMS_PROVIDER=twilio`
+- Existing 2Factor adapter: `SMS_PROVIDER=2factor`
+
+Changing provider does not change the customer session format or customer data.
