@@ -1,13 +1,8 @@
-import { createCipheriv, createDecipheriv, createHash, randomBytes, randomInt, randomUUID } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, randomBytes, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
 import { getSql, dbSource } from "./db";
 import { requestCustomerOtp, verifyCustomerOtp } from "./customer-otp.server";
 
 type Row = Record<string, unknown>;
-const OTP_TTL_SECONDS = 300;
-const OTP_RESEND_SECONDS = 60;
-const OTP_MAX_PER_HOUR = 5;
-const SESSION_DAYS = 30;
-
 function env(name: string): string | undefined {
   const value = process.env[name]?.trim();
   return value || undefined;
