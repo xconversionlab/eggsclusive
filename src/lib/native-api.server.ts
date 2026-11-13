@@ -180,33 +180,53 @@ export async function createNativeOrder(request: Request, body: unknown) {
   requirePersistentDatabase();
   const customer = await authenticateNativeRequest(request);
   if (!customer) return { ok: false as const, status: 401, error: "Please log in again." };
-  if (!body || typeof body !== "object" || Array.isArray(body)) return { ok: false as const, status: 400, error: "Invalid order details." };
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return { ok: false as const, status: 400, error: "Invalid order details." };
+  }
   const value = body as Record<string, unknown>;
+  const productType = value.productType === "water_can" ? "water_can" : value.productType === "egg" ? "egg" : "";
   const quantity = Number(value.quantity);
   const address = safeAddress(value.address);
-  const payment = typeof value.payment === "string" ? value.payment : "UPI · demo";
-  if (!Number.isInteger(quantity) || quantity < 1 || quantity > 360 || !address) {
-    return { ok: false as const, status: 400, error: "Check egg quantity and delivery address." };
+  const emptyBottlesToReturn = value.emptyBottlesToReturn !== false;
+  const floorCount = Number.isInteger(value.floorCount) ? Number(value.floorCount) : 0;
+
+  if (!productType || !Number.isInteger(quantity) || quantity < 1 ||
+      (productType === "egg" && quantity > 360) ||
+      (productType === "water_can" && quantity > 30) ||
+      !address || floorCount < 0 || floorCount > 100) {
+    return { ok: false as const, status: 400, error: "Check product, quantity and delivery address." };
   }
+
   const partner = DELIVERY_PARTNERS
     .map((candidate) => ({ candidate, distance: distanceKm(address.latitude, address.longitude, candidate.lat, candidate.lng) }))
-    .filter(({ candidate, distance }) => distance <= 5 && candidate.stock >= quantity)
+    .filter(({ distance }) => distance <= 5)
     .sort((a, b) => a.distance - b.distance)[0]?.candidate;
-  if (!partner) return { ok: false as const, status: 422, error: "No active delivery partner is available at this map location." };
+  if (!partner) return { ok: false as const, status: 422, error: "No delivery partner is currently configured for this map location." };
+  if (productType === "egg" && partner.stock < quantity) {
+    return { ok: false as const, status: 422, error: "The assigned shop does not have enough egg stock for this quantity." };
+  }
 
-  const totalPaise = quantity * partner.price;
-  const orderId = `SP-${new Date().toISOString().slice(2, 10).replace(/-/g, "")}-${randomBytes(3).toString("hex").toUpperCase()}`;
+  // Client-confirmed Water Can rates. Floor charge remains zero until the business configures it.
+  const unitPricePaise = productType === "water_can" ? 3000 : partner.price;
+  const bottleDepositPaise = productType === "water_can" && !emptyBottlesToReturn ? quantity * 15000 : 0;
+  const floorDeliveryChargePaise = 0;
+  const totalPaise = (quantity * unitPricePaise) + bottleDepositPaise + floorDeliveryChargePaise;
+  const orderId = \`EG-\${new Date().toISOString().slice(2, 10).replace(/-/g, "")}-\${randomBytes(3).toString("hex").toUpperCase()}\`;
   const deliveryOtp = String(randomInt(100000, 1000000));
   const sql = await getSql();
+
   await sql.query(
-    `insert into native_orders
+    \`insert into native_orders
       (id, customer_id, customer_phone, customer_name, quantity, unit_price_paise, total_paise,
        payment_method, status, partner_shop, partner_name, partner_phone, delivery_otp_encrypted,
-       address_label, address_line, city, pincode, latitude, longitude)
-     values ($1,$2,$3,$4,$5,$6,$7,$8,'placed',$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
-    [orderId, customer.id, customer.phone, customer.name, quantity, partner.price, totalPaise,
-      payment, partner.shop, partner.rider, partner.phone, encryptOtp(deliveryOtp),
-      address.label, address.line, address.city, address.pincode, address.latitude, address.longitude],
+       address_label, address_line, city, pincode, latitude, longitude,
+       product_type, bottle_deposit_paise, empty_bottles_to_return, floor_count,
+       floor_delivery_charge_paise, payment_status)
+     values ($1,$2,$3,$4,$5,$6,$7,'payment_pending','placed',$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,'pending')\`,
+    [orderId, customer.id, customer.phone, customer.name, quantity, unitPricePaise, totalPaise,
+      partner.shop, partner.rider, partner.phone, encryptOtp(deliveryOtp),
+      address.label, address.line, address.city, address.pincode, address.latitude, address.longitude,
+      productType, bottleDepositPaise, emptyBottlesToReturn, floorCount, floorDeliveryChargePaise],
   );
   await sql.query(
     "insert into native_order_events (id, order_id, from_status, to_status, note, actor) values ($1,$2,null,'placed','Order placed by customer','customer')",
@@ -216,13 +236,27 @@ export async function createNativeOrder(request: Request, body: unknown) {
   return {
     ok: true as const,
     order: {
-      id: orderId, createdAt: new Date().toISOString(), quantity, totalPaise,
-      status: "placed", payment, partnerName: partner.rider, partnerPhone: partner.phone,
-      deliveryOtp, addressLabel: address.label, deliveryAddress: [address.line, address.city, address.pincode].join(", "),
+      id: orderId,
+      createdAt: new Date().toISOString(),
+      productType,
+      quantity,
+      unitPricePaise,
+      bottleDepositPaise,
+      emptyBottlesToReturn,
+      floorCount,
+      floorDeliveryChargePaise,
+      totalPaise,
+      status: "placed",
+      payment: "Payment pending",
+      paymentStatus: "pending",
+      partnerName: partner.rider,
+      partnerPhone: partner.phone,
+      deliveryOtp,
+      addressLabel: address.label,
+      deliveryAddress: [address.line, address.city, address.pincode].join(", "),
     },
   };
 }
-
 export async function listNativeOrders(request: Request) {
   requirePersistentDatabase();
   const customer = await authenticateNativeRequest(request);
