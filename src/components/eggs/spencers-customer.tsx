@@ -467,7 +467,7 @@ export function SpencersCustomerApp() {
                 </button>
               </div>
             </div>
-          ) : null}
+          )}
           {loginError ? <p role="alert" className="mt-3 text-sm text-red-700">{loginError}</p> : null}
           <div className="mt-6 flex items-center justify-center gap-2 text-xs text-customer-muted"><ShieldCheck size={14} />Your mobile number is used for order updates.</div>
         </section>
