@@ -335,5 +335,16 @@ export async function revokeCustomerSession(request: Request) {
 }
 
 export function isCustomerAuthConfigured() {
-  return Boolean(env("TWOFACTOR_API_KEY") && env("TWOFACTOR_OTP_TEMPLATE_NAME") && env("NATIVE_AUTH_SECRET"));
+  const provider = (env("SMS_PROVIDER") ?? "2factor").toLowerCase();
+  const providerReady = provider === "twilio"
+    ? Boolean(
+        env("TWILIO_ACCOUNT_SID") &&
+        env("TWILIO_API_KEY_SID") &&
+        env("TWILIO_API_KEY_SECRET") &&
+        (env("TWILIO_MESSAGING_SERVICE_SID") || env("TWILIO_FROM_NUMBER")),
+      )
+    : provider === "2factor"
+      ? Boolean(env("TWOFACTOR_API_KEY") && env("TWOFACTOR_OTP_TEMPLATE_NAME"))
+      : false;
+  return providerReady && Boolean(env("NATIVE_AUTH_SECRET"));
 }
