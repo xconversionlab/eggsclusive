@@ -167,6 +167,124 @@ async function sendOtpWithTwilio(phone: string, otp: string): Promise<SmsSendRes
   return { ok: true };
 }
 
+type TwilioVerifyConfig = {
+  accountSid: string;
+  apiKeySid: string;
+  apiKeySecret: string;
+  serviceSid: string;
+};
+
+function twilioVerifyConfig(): TwilioVerifyConfig | null {
+  const accountSid = env("TWILIO_ACCOUNT_SID");
+  const apiKeySid = env("TWILIO_API_KEY_SID");
+  const apiKeySecret = env("TWILIO_API_KEY_SECRET");
+  const serviceSid = env("TWILIO_VERIFY_SERVICE_SID");
+  if (!accountSid || !apiKeySid || !apiKeySecret || !serviceSid) return null;
+  if (!/^AC[0-9a-f]{32}$/i.test(accountSid) ||
+      !/^SK[0-9a-f]{32}$/i.test(apiKeySid) ||
+      !/^VA[0-9a-f]{32}$/i.test(serviceSid)) return null;
+  return { accountSid, apiKeySid, apiKeySecret, serviceSid };
+}
+
+async function twilioVerifyRequest(
+  config: TwilioVerifyConfig,
+  resource: "Verifications" | "VerificationCheck",
+  fields: Record<string, string>,
+) {
+  const body = new URLSearchParams(fields);
+  let response: Response;
+  try {
+    response = await fetch(
+      \`https://verify.twilio.com/v2/Services/\${config.serviceSid}/\${resource}\`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: "Basic " + Buffer.from(\`\${config.apiKeySid}:\${config.apiKeySecret}\`).toString("base64"),
+          "Content-Type": "application/x-www-form-urlencoded",
+          Accept: "application/json",
+        },
+        body: body.toString(),
+        signal: AbortSignal.timeout(12000),
+      },
+    );
+  } catch {
+    return { ok: false as const, httpStatus: 0, code: null as number | null, message: "Twilio Verify could not be reached." };
+  }
+  const payload = await response.json().catch(() => ({})) as {
+    sid?: string;
+    status?: string;
+    valid?: boolean;
+    code?: number;
+    message?: string;
+  };
+  if (!response.ok) {
+    console.error("[customer-otp] Twilio Verify request failed", {
+      resource,
+      httpStatus: response.status,
+      code: payload.code ?? null,
+      message: payload.message?.slice(0, 240) ?? null,
+    });
+    return {
+      ok: false as const,
+      httpStatus: response.status,
+      code: payload.code ?? null,
+      message: payload.message ?? "Twilio Verify rejected the request.",
+    };
+  }
+  return { ok: true as const, httpStatus: response.status, payload };
+}
+
+async function startTwilioVerify(phone: string): Promise<SmsSendResult> {
+  const config = twilioVerifyConfig();
+  if (!config) {
+    return {
+      ok: false,
+      status: 503,
+      error: "Twilio Verify is not fully configured. Add the Account SID, API key SID, API key secret and Verify Service SID in Vercel.",
+    };
+  }
+  const result = await twilioVerifyRequest(config, "Verifications", { To: phone, Channel: "sms" });
+  if (!result.ok) {
+    if (result.httpStatus === 401 || result.httpStatus === 403) {
+      return { ok: false, status: 503, error: "Twilio authentication failed. Check the API key permissions and credentials in Vercel." };
+    }
+    if (result.code === 60200 || result.code === 60203 || result.code === 60212) {
+      return { ok: false, status: 429, error: "Twilio could not start this verification. Check the recipient, trial restrictions and Verify limits." };
+    }
+    return { ok: false, status: 502, error: "Twilio Verify did not accept the OTP request. Check the Verify service and SMS settings." };
+  }
+  if (result.payload.status !== "pending") {
+    return { ok: false, status: 502, error: "Twilio Verify did not return a pending SMS verification." };
+  }
+  return { ok: true };
+}
+
+type VerifyCheckResult =
+  | { ok: true }
+  | { ok: false; status: number; error: string; countAttempt: boolean };
+
+async function checkTwilioVerify(phone: string, code: string): Promise<VerifyCheckResult> {
+  const config = twilioVerifyConfig();
+  if (!config) {
+    return { ok: false, status: 503, error: "Twilio Verify is not configured correctly in Vercel.", countAttempt: false };
+  }
+  const result = await twilioVerifyRequest(config, "VerificationCheck", { To: phone, Code: code });
+  if (!result.ok) {
+    if (result.httpStatus === 401 || result.httpStatus === 403) {
+      return { ok: false, status: 503, error: "Twilio authentication failed. Check the Verify API key permissions and credentials.", countAttempt: false };
+    }
+    if (result.httpStatus === 404) {
+      return { ok: false, status: 400, error: "That OTP has expired or was already used. Request a new code.", countAttempt: false };
+    }
+    if (result.code === 60203 || result.code === 60212) {
+      return { ok: false, status: 429, error: "Too many verification attempts. Request a new OTP.", countAttempt: false };
+    }
+    return { ok: false, status: 502, error: "Twilio could not check the OTP. Please try again.", countAttempt: false };
+  }
+  if (result.payload.status === "approved" && result.payload.valid === true) return { ok: true };
+  return { ok: false, status: 400, error: "Incorrect OTP. Please try again.", countAttempt: true };
+}
+
 async function sendOtpWithTwoFactor(phone: string, otp: string): Promise<SmsSendResult> {
   const apiKey = env("TWOFACTOR_API_KEY");
   const templateName = env("TWOFACTOR_OTP_TEMPLATE_NAME");
@@ -207,7 +325,6 @@ export async function requestCustomerOtp(phoneInput: unknown, requesterInput: un
   const phone = normalizeIndianPhone(phoneInput);
   if (!phone) return { ok: false as const, status: 400, error: "Enter a valid 10-digit Indian mobile number." };
 
-  // Fail before contacting the SMS provider if the OTP/session signing secret is absent.
   authSecret();
   const requester = typeof requesterInput === "string" && requesterInput.trim()
     ? requesterInput.trim().slice(0, 160)
@@ -234,19 +351,28 @@ export async function requestCustomerOtp(phoneInput: unknown, requesterInput: un
     return { ok: false as const, status: 429, error: "Too many OTP requests from this connection. Try again later." };
   }
 
-  const otp = String(randomInt(100000, 1000000));
   const provider = (env("SMS_PROVIDER") ?? "2factor").toLowerCase();
-  const delivery = provider === "twilio"
-    ? await sendOtpWithTwilio(phone, otp)
-    : provider === "2factor"
-      ? await sendOtpWithTwoFactor(phone, otp)
-      : { ok: false as const, status: 503, error: "Unsupported SMS_PROVIDER. Use 'twilio' or '2factor'." };
+  let delivery: SmsSendResult;
+  let storedOtpHash: string;
+
+  if (provider === "twilio-verify") {
+    delivery = await startTwilioVerify(phone);
+    // Twilio Verify creates and holds the OTP; store only a non-secret marker locally.
+    storedOtpHash = "twilio-verify:" + randomUUID();
+  } else {
+    const otp = String(randomInt(100000, 1000000));
+    delivery = provider === "twilio"
+      ? await sendOtpWithTwilio(phone, otp)
+      : provider === "2factor"
+        ? await sendOtpWithTwoFactor(phone, otp)
+        : { ok: false as const, status: 503, error: "Unsupported SMS_PROVIDER. Use 'twilio-verify', 'twilio' or '2factor'." };
+    storedOtpHash = otpDigest(phone, otp);
+  }
 
   if (!delivery.ok) return delivery;
-
   await sql.query(
     "insert into native_otp_challenges (id, phone, requester_hash, otp_hash, expires_at) values ($1, $2, $3, $4, now() + interval '5 minutes')",
-    [randomUUID(), phone, requesterHash, otpDigest(phone, otp)],
+    [randomUUID(), phone, requesterHash, storedOtpHash],
   );
   return { ok: true as const, phone, expiresInSeconds: OTP_TTL_SECONDS, resendAfterSeconds: OTP_RESEND_SECONDS };
 }
@@ -272,18 +398,32 @@ export async function verifyCustomerOtp(phoneInput: unknown, codeInput: unknown,
     return { ok: false as const, status: 429, error: "Too many incorrect attempts. Request a new OTP." };
   }
 
-  const candidateDigest = otpDigest(phone, code);
-  if (!safeEqualHex(challenge.otp_hash, candidateDigest)) {
-    await sql.query(
-      "update native_otp_challenges set attempts = attempts + 1 where id = $1 and consumed_at is null and attempts < $2",
-      [challenge.id, OTP_MAX_ATTEMPTS],
-    );
-    return { ok: false as const, status: 400, error: "Incorrect OTP. Please try again." };
+  if (challenge.otp_hash.startsWith("twilio-verify:")) {
+    const checked = await checkTwilioVerify(phone, code);
+    if (!checked.ok) {
+      if (checked.countAttempt) {
+        await sql.query(
+          "update native_otp_challenges set attempts = attempts + 1 where id = $1 and consumed_at is null and attempts < $2",
+          [challenge.id, OTP_MAX_ATTEMPTS],
+        );
+      }
+      return { ok: false as const, status: checked.status, error: checked.error };
+    }
+  } else {
+    const candidateDigest = otpDigest(phone, code);
+    if (!safeEqualHex(challenge.otp_hash, candidateDigest)) {
+      await sql.query(
+        "update native_otp_challenges set attempts = attempts + 1 where id = $1 and consumed_at is null and attempts < $2",
+        [challenge.id, OTP_MAX_ATTEMPTS],
+      );
+      return { ok: false as const, status: 400, error: "Incorrect OTP. Please try again." };
+    }
   }
 
+  // Consume exactly once, even if duplicate verification requests race.
   const consumed = await sql.query<{ phone: string }>(
     "update native_otp_challenges set consumed_at = now() where id = $1 and consumed_at is null and expires_at > now() and attempts < $2 and otp_hash = $3 returning phone",
-    [challenge.id, OTP_MAX_ATTEMPTS, candidateDigest],
+    [challenge.id, OTP_MAX_ATTEMPTS, challenge.otp_hash],
   );
   if (!consumed[0]) return { ok: false as const, status: 400, error: "OTP has expired or was already used. Request a new code." };
 
@@ -301,7 +441,6 @@ export async function verifyCustomerOtp(phoneInput: unknown, codeInput: unknown,
   );
   return { ok: true as const, token, customer, expiresInSeconds: SESSION_DAYS * 86400 };
 }
-
 export async function getCustomerSession(request: Request) {
   requirePersistentDatabase();
   const token = readCookie(request, SESSION_COOKIE);
@@ -336,15 +475,17 @@ export async function revokeCustomerSession(request: Request) {
 
 export function isCustomerAuthConfigured() {
   const provider = (env("SMS_PROVIDER") ?? "2factor").toLowerCase();
-  const providerReady = provider === "twilio"
-    ? Boolean(
-        env("TWILIO_ACCOUNT_SID") &&
-        env("TWILIO_API_KEY_SID") &&
-        env("TWILIO_API_KEY_SECRET") &&
-        (env("TWILIO_MESSAGING_SERVICE_SID") || env("TWILIO_FROM_NUMBER")),
-      )
-    : provider === "2factor"
-      ? Boolean(env("TWOFACTOR_API_KEY") && env("TWOFACTOR_OTP_TEMPLATE_NAME"))
-      : false;
+  const providerReady = provider === "twilio-verify"
+    ? Boolean(twilioVerifyConfig())
+    : provider === "twilio"
+      ? Boolean(
+          env("TWILIO_ACCOUNT_SID") &&
+          env("TWILIO_API_KEY_SID") &&
+          env("TWILIO_API_KEY_SECRET") &&
+          (env("TWILIO_MESSAGING_SERVICE_SID") || env("TWILIO_FROM_NUMBER")),
+        )
+      : provider === "2factor"
+        ? Boolean(env("TWOFACTOR_API_KEY") && env("TWOFACTOR_OTP_TEMPLATE_NAME"))
+        : false;
   return providerReady && Boolean(env("NATIVE_AUTH_SECRET"));
 }
