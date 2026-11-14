@@ -98,11 +98,11 @@ private data class CustomerProfile(
     val street: String = "",
     val area: String = "",
     val landmark: String = "",
-    val city: String = "Chennai",
+    val city: String = "",
     val pincode: String = "",
     val addressLabel: String = "Home",
-    val latitude: Double = 13.0003,
-    val longitude: Double = 80.2668,
+    val latitude: Double = 0.0,
+    val longitude: Double = 0.0,
     val phoneVerified: Boolean = false,
     val savedAddresses: List<SavedAddress> = emptyList(),
     val selectedAddressId: String = "",
@@ -137,41 +137,6 @@ private data class CustomerOrder(
     val bottleDepositPaise: Int = 0,
     val floorCount: Int = 0,
 )
-
-private data class DeliveryPartner(
-    val shopName: String,
-    val riderName: String,
-    val phone: String,
-    val latitude: Double,
-    val longitude: Double,
-    val pricePerEggPaise: Int,
-    val stockEggs: Int,
-    val radiusKm: Double = 5.0,
-)
-
-private val DELIVERY_PARTNERS = listOf(
-    DeliveryPartner("Murugan Egg Mart", "Selvam", "9841022001", 13.0003, 80.2668, 700, 420),
-    DeliveryPartner("Lakshmi Naatu Kozhi", "Kannan", "9841022014", 13.0368, 80.2676, 720, 280),
-    DeliveryPartner("Anna Fresh Trays", "Imran", "9841022030", 13.0850, 80.2101, 680, 640),
-    DeliveryPartner("Velachery Sunrise", "Divya", "9841022042", 12.9815, 80.2180, 740, 180),
-)
-
-private fun distanceKm(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
-    val toRadians = { value: Double -> value * Math.PI / 180.0 }
-    val dLat = toRadians(lat2 - lat1)
-    val dLon = toRadians(lon2 - lon1)
-    val a = kotlin.math.sin(dLat / 2) * kotlin.math.sin(dLat / 2) +
-        kotlin.math.cos(toRadians(lat1)) * kotlin.math.cos(toRadians(lat2)) *
-        kotlin.math.sin(dLon / 2) * kotlin.math.sin(dLon / 2)
-    return 6371.0 * 2.0 * kotlin.math.asin(kotlin.math.min(1.0, kotlin.math.sqrt(a)))
-}
-
-private fun servingPartner(profile: CustomerProfile): DeliveryPartner? =
-    DELIVERY_PARTNERS
-        .map { it to distanceKm(profile.latitude, profile.longitude, it.latitude, it.longitude) }
-        .filter { (partner, distance) -> distance <= partner.radiusKm && partner.stockEggs > 0 }
-        .minByOrNull { it.second }
-        ?.first
 
 private data class WalletTransaction(
     val id: String, val createdAt: Long, val title: String, val amountPaise: Int, val balancePaise: Int,
@@ -267,18 +232,8 @@ private fun SpencersApp() {
             scope.launch { snackbar.showSnackbar("Complete your verified mobile profile and delivery address first.") }
             return
         }
-        val partner = servingPartner(profile)
-        if (partner == null) {
-            tab = MainTab.Profile
-            scope.launch { snackbar.showSnackbar("Delivery is not available at this map location yet.") }
-            return
-        }
         val orderQuantity = if (selectedProductType == "water_can") waterQuantity else eggQuantity
-        if (selectedProductType == "egg" && orderQuantity > partner.stockEggs) {
-            scope.launch { snackbar.showSnackbar("Only ${partner.stockEggs} eggs are currently available from ${partner.shopName}.") }
-            return
-        }
-        val unitPrice = if (selectedProductType == "water_can") 3000 else partner.pricePerEggPaise
+        val unitPrice = if (selectedProductType == "water_can") 3000 else PRICE_PER_EGG_PAISE
         val bottleDeposit = if (selectedProductType == "water_can" && noEmptyBottles) orderQuantity * 15000 else 0
         val estimatedTotal = (orderQuantity * unitPrice) + bottleDeposit
 
@@ -403,7 +358,7 @@ private fun SpencersApp() {
                         item.optString("street"),
                         item.optString("area"),
                         item.optString("landmark"),
-                        item.optString("city", "Chennai"),
+                        item.optString("city"),
                         item.optString("pincode"),
                         item.optDouble("latitude"),
                         item.optDouble("longitude"),
@@ -531,8 +486,6 @@ private fun SpencersApp() {
         return
     }
 
-    val activePartner = servingPartner(profile)
-
     Scaffold(
         containerColor = Paper,
         snackbarHost = { SnackbarHost(snackbar) },
@@ -556,7 +509,6 @@ private fun SpencersApp() {
             when (activeTab) {
                 MainTab.Order -> OrderScreen(
                     profile = profile,
-                    partner = activePartner,
                     selectedProductType = selectedProductType,
                     onProductTypeChange = { selectedProductType = it },
                     eggQuantity = eggQuantity,
@@ -604,7 +556,6 @@ private fun SpencersApp() {
 @Composable
 private fun OrderScreen(
     profile: CustomerProfile,
-    partner: DeliveryPartner?,
     selectedProductType: String,
     onProductTypeChange: (String) -> Unit,
     eggQuantity: Int,
@@ -682,7 +633,7 @@ private fun OrderScreen(
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(13.dp)) {
                         RoundAction(Icons.Filled.Remove, "Decrease egg quantity", eggQuantity > 1) { onEggQuantityChange(eggQuantity - 1) }
                         Text("$eggQuantity eggs", color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 13.sp)
-                        RoundAction(Icons.Filled.Add, "Increase egg quantity", eggQuantity < 360 && (partner == null || eggQuantity < partner.stockEggs)) { onEggQuantityChange(eggQuantity + 1) }
+                        RoundAction(Icons.Filled.Add, "Increase egg quantity", eggQuantity < 360) { onEggQuantityChange(eggQuantity + 1) }
                     }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.fillMaxWidth()) {
@@ -826,16 +777,13 @@ private fun OrderScreen(
         }
         Button(
             onClick = onPlaceOrder,
-            enabled = partner != null && profile.isReady,
+            enabled = profile.isReady,
             modifier = Modifier.fillMaxWidth().height(55.dp),
             shape = RoundedCornerShape(17.dp),
             colors = ButtonDefaults.buttonColors(containerColor = Navy),
         ) {
             Text("Place order · " + money(total), fontWeight = FontWeight.ExtraBold, fontSize = 15.sp)
             Icon(Icons.Filled.ArrowForward, null, modifier = Modifier.padding(start = 9.dp))
-        }
-        if (partner == null) {
-            Text("Ordering is not available for the selected map location yet.", color = Color(0xFF9A3412), fontSize = 11.sp)
         }
         Text("Pay the delivery partner in cash when your order arrives. No online payment is taken in this app.", color = Muted, fontSize = 10.sp, lineHeight = 15.sp)
     }
@@ -985,7 +933,7 @@ private fun ActivityScreen(
                                     Text("Partner contact: +91 ${order.partnerPhone}", color = Muted, fontSize = 11.sp)
                                 }
                             } else {
-                                Text("Delivery partner: being assigned", color = Muted, fontSize = 11.sp)
+                                Text("Spencer's team will assign your delivery partner. Details will appear here.", color = Muted, fontSize = 11.sp, lineHeight = 15.sp)
                             }
                             if (order.deliveryOtp.isNotBlank() && stage in 0..3) {
                                 Card(colors = CardDefaults.cardColors(containerColor = PaleBlue), shape = RoundedCornerShape(14.dp)) {
@@ -1056,7 +1004,7 @@ private fun ProfileScreen(
     var newStreet by rememberSaveable { mutableStateOf("") }
     var newArea by rememberSaveable { mutableStateOf("") }
     var newLandmark by rememberSaveable { mutableStateOf("") }
-    var newCity by rememberSaveable { mutableStateOf("Chennai") }
+    var newCity by rememberSaveable { mutableStateOf("") }
     var newPincode by rememberSaveable { mutableStateOf("") }
 
     Column(
@@ -1205,7 +1153,7 @@ private fun ProfileScreen(
                         onProfileChange(profile.withAddress(address))
                         showAddAddress = false
                         newLabel = ""; newDoor = ""; newStreet = ""; newArea = ""; newLandmark = ""
-                        newCity = "Chennai"; newPincode = ""
+                        newCity = ""; newPincode = ""
                     },
                 ) { Text("Save address") }
             },
@@ -1239,7 +1187,7 @@ private fun LoginScreen(
             modifier = Modifier.width(240.dp).height(190.dp),
             contentScale = ContentScale.Fit,
         )
-        Text("Eggsclusive", color = Navy, fontSize = 27.sp, fontWeight = FontWeight.ExtraBold)
+        Text("Spencers Enterprises", color = Navy, fontSize = 27.sp, fontWeight = FontWeight.ExtraBold)
         Text("Spencer’s Enterprises · Enter your mobile number for a secure SMS OTP.", color = Muted, fontSize = 12.sp)
         Spacer(Modifier.height(18.dp))
         AppTextField("Your name", name, { name = it })
@@ -1403,7 +1351,7 @@ private fun loadProfile(prefs: SharedPreferences): CustomerProfile {
     val street = prefs.getString("profile_street", "").orEmpty()
     val area = prefs.getString("profile_area", "").orEmpty()
     val landmark = prefs.getString("profile_landmark", "").orEmpty()
-    val city = prefs.getString("profile_city", "Chennai").orEmpty().ifBlank { "Chennai" }
+    val city = prefs.getString("profile_city", "").orEmpty()
     val pincode = prefs.getString("profile_pincode", "").orEmpty()
     val label = prefs.getString("profile_address_label", "Home").orEmpty().ifBlank { "Home" }
     val latitude = prefs.getFloat("profile_latitude", 13.0003f).toDouble()
@@ -1415,7 +1363,7 @@ private fun loadProfile(prefs: SharedPreferences): CustomerProfile {
             SavedAddress(
                 item.optString("id"), item.optString("label", "Home"), item.optString("door"),
                 item.optString("street"), item.optString("area"), item.optString("landmark"),
-                item.optString("city", "Chennai"), item.optString("pincode"),
+                item.optString("city"), item.optString("pincode"),
                 item.optDouble("latitude", latitude), item.optDouble("longitude", longitude),
             )
         }.takeLast(4)
