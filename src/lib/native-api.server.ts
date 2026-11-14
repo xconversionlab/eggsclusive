@@ -165,24 +165,39 @@ export async function createNativeOrder(request: Request, body: unknown) {
     return { ok: false as const, status: 400, error: "Invalid order details." };
   }
   const value = body as Record<string, unknown>;
-  const productType = value.productType === "water_can" ? "water_can" : value.productType === "egg" ? "egg" : "";
-  const quantity = Number(value.quantity);
+  const eggQuantity = Number(
+    value.eggQuantity ?? (value.productType === "egg" ? value.quantity : Number.NaN),
+  );
+  const waterCanQuantity = Number(
+    value.waterCanQuantity ?? (value.productType === "water_can" ? value.quantity : 0),
+  );
   const address = safeAddress(value.address);
   const emptyBottlesToReturn = value.emptyBottlesToReturn !== false;
   const floorCount = Number.isInteger(value.floorCount) ? Number(value.floorCount) : 0;
 
-  if (!productType || !Number.isInteger(quantity) || quantity < 1 ||
-      (productType === "egg" && quantity > 360) ||
-      (productType === "water_can" && quantity > 30) ||
+  // Fresh Egg is the mandatory primary product. Water Can is an optional add-on.
+  if (!Number.isInteger(eggQuantity) || eggQuantity < 1 || eggQuantity > 360 ||
+      !Number.isInteger(waterCanQuantity) || waterCanQuantity < 0 || waterCanQuantity > 30 ||
       !address || floorCount < 0 || floorCount > 100) {
-    return { ok: false as const, status: 400, error: "Check product, quantity and delivery address." };
+    return {
+      ok: false as const,
+      status: 400,
+      error: "Choose at least one Fresh Egg, check both quantities and complete the delivery address.",
+    };
   }
 
-  // Client-confirmed Water Can rates. Floor charge remains zero until the business configures it.
-  const unitPricePaise = productType === "water_can" ? 3000 : 700;
-  const bottleDepositPaise = productType === "water_can" && !emptyBottlesToReturn ? quantity * 15000 : 0;
+  // Client-confirmed prices: Fresh Egg ₹7, Water Can ₹30, refundable-can deposit ₹150.
+  const eggUnitPricePaise = 700;
+  const waterCanUnitPricePaise = 3000;
+  const bottleDepositPaise = waterCanQuantity > 0 && !emptyBottlesToReturn
+    ? waterCanQuantity * 15000
+    : 0;
   const floorDeliveryChargePaise = 0;
-  const totalPaise = (quantity * unitPricePaise) + bottleDepositPaise + floorDeliveryChargePaise;
+  const totalPaise =
+    (eggQuantity * eggUnitPricePaise) +
+    (waterCanQuantity * waterCanUnitPricePaise) +
+    bottleDepositPaise +
+    floorDeliveryChargePaise;
   const orderId = `EG-${new Date().toISOString().slice(2, 10).replace(/-/g, "")}-${randomBytes(3).toString("hex").toUpperCase()}`;
   const deliveryOtp = String(randomInt(100000, 1000000));
   const sql = await getSql();
@@ -192,13 +207,14 @@ export async function createNativeOrder(request: Request, body: unknown) {
       (id, customer_id, customer_phone, customer_name, quantity, unit_price_paise, total_paise,
        payment_method, status, partner_shop, partner_name, partner_phone, delivery_otp_encrypted,
        address_label, address_line, city, pincode, latitude, longitude,
-       product_type, bottle_deposit_paise, empty_bottles_to_return, floor_count,
+       product_type, water_can_quantity, bottle_deposit_paise, empty_bottles_to_return, floor_count,
        floor_delivery_charge_paise, payment_status)
-     values ($1,$2,$3,$4,$5,$6,$7,'cash_on_delivery','placed',$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,'pending')`,
-    [orderId, customer.id, customer.phone, customer.name, quantity, unitPricePaise, totalPaise,
+     values ($1,$2,$3,$4,$5,$6,$7,'cash_on_delivery','placed',$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,
+       'egg',$18,$19,$20,$21,$22,'pending')`,
+    [orderId, customer.id, customer.phone, customer.name, eggQuantity, eggUnitPricePaise, totalPaise,
       "", "", "", encryptOtp(deliveryOtp),
       address.label, address.line, address.city, address.pincode, address.latitude, address.longitude,
-      productType, bottleDepositPaise, emptyBottlesToReturn, floorCount, floorDeliveryChargePaise],
+      waterCanQuantity, bottleDepositPaise, emptyBottlesToReturn, floorCount, floorDeliveryChargePaise],
   );
   await sql.query(
     "insert into native_order_events (id, order_id, from_status, to_status, note, actor) values ($1,$2,null,'placed','Order placed by customer','customer')",
@@ -210,9 +226,12 @@ export async function createNativeOrder(request: Request, body: unknown) {
     order: {
       id: orderId,
       createdAt: new Date().toISOString(),
-      productType,
-      quantity,
-      unitPricePaise,
+      productType: "egg",
+      quantity: eggQuantity,
+      eggQuantity,
+      waterCanQuantity,
+      unitPricePaise: eggUnitPricePaise,
+      waterCanUnitPricePaise,
       bottleDepositPaise,
       emptyBottlesToReturn,
       floorCount,
@@ -237,7 +256,7 @@ export async function listNativeOrders(request: Request) {
   const rows = await sql.query<Row>(
     `select id, created_at, quantity, total_paise, payment_method, payment_status, status,
             partner_name, partner_phone, delivery_otp_encrypted, address_label,
-            address_line, city, pincode, product_type, bottle_deposit_paise, floor_count,
+            address_line, city, pincode, product_type, water_can_quantity, bottle_deposit_paise, floor_count,
             floor_delivery_charge_paise, empty_bottles_to_return,
             exists(select 1 from native_wallet_transactions t where t.order_id = native_orders.id and t.transaction_type = 'refund') as refund_applied
        from native_orders
@@ -260,6 +279,8 @@ export async function listNativeOrders(request: Request) {
       paymentStatus: String(row.payment_status ?? "pending"),
       status: String(row.status),
       productType: String(row.product_type ?? "egg"),
+      eggQuantity: Number(row.quantity),
+      waterCanQuantity: Number(row.water_can_quantity ?? 0),
       bottleDepositPaise: Number(row.bottle_deposit_paise ?? 0),
       floorCount: Number(row.floor_count ?? 0),
       floorDeliveryChargePaise: Number(row.floor_delivery_charge_paise ?? 0),
@@ -376,7 +397,8 @@ export async function listOperationsNativeOrders(request: Request) {
   }
   const sql = await getSql();
   const rows = await sql.query<Row>(
-    `select id, customer_name, customer_phone, quantity, total_paise, payment_method, status,
+    `select id, customer_name, customer_phone, quantity, water_can_quantity, bottle_deposit_paise,
+            total_paise, payment_method, status,
             partner_shop, partner_name, partner_phone, address_label, address_line, city, pincode,
             created_at, status_changed_at
        from native_orders
@@ -389,6 +411,9 @@ export async function listOperationsNativeOrders(request: Request) {
       customerName: row.customer_name,
       phone: row.customer_phone,
       quantity: Number(row.quantity),
+      eggQuantity: Number(row.quantity),
+      waterCanQuantity: Number(row.water_can_quantity ?? 0),
+      bottleDepositPaise: Number(row.bottle_deposit_paise ?? 0),
       totalPaise: Number(row.total_paise),
       payment: row.payment_method,
       status: row.status,
