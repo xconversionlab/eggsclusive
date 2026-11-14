@@ -1354,8 +1354,8 @@ private fun loadProfile(prefs: SharedPreferences): CustomerProfile {
     val city = prefs.getString("profile_city", "").orEmpty()
     val pincode = prefs.getString("profile_pincode", "").orEmpty()
     val label = prefs.getString("profile_address_label", "Home").orEmpty().ifBlank { "Home" }
-    val latitude = prefs.getFloat("profile_latitude", 13.0003f).toDouble()
-    val longitude = prefs.getFloat("profile_longitude", 80.2668f).toDouble()
+    val latitude = prefs.getFloat("profile_latitude", 0.0f).toDouble()
+    val longitude = prefs.getFloat("profile_longitude", 0.0f).toDouble()
     val addresses = try {
         val array = JSONArray(prefs.getString("profile_saved_addresses", "[]"))
         (0 until array.length()).map { i ->
