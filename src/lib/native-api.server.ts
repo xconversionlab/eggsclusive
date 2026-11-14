@@ -72,25 +72,6 @@ export async function authenticateNativeRequest(request: Request): Promise<Nativ
   return rows[0];
 }
 
-type DeliveryPartner = {
-  shop: string; rider: string; phone: string; lat: number; lng: number; price: number; stock: number;
-};
-
-const DELIVERY_PARTNERS: DeliveryPartner[] = [
-  { shop: "Murugan Egg Mart", rider: "Selvam", phone: "9841022001", lat: 13.0003, lng: 80.2668, price: 700, stock: 420 },
-  { shop: "Lakshmi Naatu Kozhi", rider: "Kannan", phone: "9841022014", lat: 13.0368, lng: 80.2676, price: 720, stock: 280 },
-  { shop: "Anna Fresh Trays", rider: "Imran", phone: "9841022030", lat: 13.0850, lng: 80.2101, price: 680, stock: 640 },
-  { shop: "Velachery Sunrise", rider: "Divya", phone: "9841022042", lat: 12.9815, lng: 80.2180, price: 740, stock: 180 },
-];
-
-function distanceKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const rad = (value: number) => value * Math.PI / 180;
-  const dLat = rad(lat2 - lat1);
-  const dLng = rad(lng2 - lng1);
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(dLng / 2) ** 2;
-  return 6371 * 2 * Math.asin(Math.min(1, Math.sqrt(a)));
-}
-
 function safeAddress(input: unknown) {
   if (!input || typeof input !== "object" || Array.isArray(input)) return null;
   const value = input as Record<string, unknown>;
@@ -197,15 +178,6 @@ export async function createNativeOrder(request: Request, body: unknown) {
     return { ok: false as const, status: 400, error: "Check product, quantity and delivery address." };
   }
 
-  const partner = DELIVERY_PARTNERS
-    .map((candidate) => ({ candidate, distance: distanceKm(address.latitude, address.longitude, candidate.lat, candidate.lng) }))
-    .filter(({ distance }) => distance <= 5)
-    .sort((a, b) => a.distance - b.distance)[0]?.candidate;
-  if (!partner) return { ok: false as const, status: 422, error: "No delivery partner is currently configured for this map location." };
-  if (productType === "egg" && partner.stock < quantity) {
-    return { ok: false as const, status: 422, error: "The assigned shop does not have enough egg stock for this quantity." };
-  }
-
   // Client-confirmed Water Can rates. Floor charge remains zero until the business configures it.
   const unitPricePaise = productType === "water_can" ? 3000 : 700;
   const bottleDepositPaise = productType === "water_can" && !emptyBottlesToReturn ? quantity * 15000 : 0;
@@ -224,7 +196,7 @@ export async function createNativeOrder(request: Request, body: unknown) {
        floor_delivery_charge_paise, payment_status)
      values ($1,$2,$3,$4,$5,$6,$7,'cash_on_delivery','placed',$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,'pending')`,
     [orderId, customer.id, customer.phone, customer.name, quantity, unitPricePaise, totalPaise,
-      partner.shop, partner.rider, partner.phone, encryptOtp(deliveryOtp),
+      "", "", "", encryptOtp(deliveryOtp),
       address.label, address.line, address.city, address.pincode, address.latitude, address.longitude,
       productType, bottleDepositPaise, emptyBottlesToReturn, floorCount, floorDeliveryChargePaise],
   );
@@ -249,8 +221,8 @@ export async function createNativeOrder(request: Request, body: unknown) {
       status: "placed",
       payment: "Cash on delivery",
       paymentStatus: "pending",
-      partnerName: partner.rider,
-      partnerPhone: partner.phone,
+      partnerName: "",
+      partnerPhone: "",
       deliveryOtp,
       addressLabel: address.label,
       deliveryAddress: [address.line, address.city, address.pincode].join(", "),
