@@ -74,7 +74,7 @@ internal val Green = Color(0xFF16845A)
 private const val PRICE_PER_EGG_PAISE = 700
 private const val PREFS_NAME = "spencers_native_customer"
 
-private enum class MainTab(val label: String) { Order("Order"), Status("Activity"), Profile("Profile") }
+private enum class MainTab(val label: String) { Order("Order"), Status("Status"), Profile("Profile") }
 
 private data class SavedAddress(
     val id: String,
@@ -174,7 +174,7 @@ private fun SpencersApp() {
     var walletEntries by remember { mutableStateOf(emptyList<WalletTransaction>()) }
     var selectedProductType by rememberSaveable { mutableStateOf("egg") }
     var eggQuantity by rememberSaveable { mutableIntStateOf(12) }
-    var waterQuantity by rememberSaveable { mutableIntStateOf(1) }
+    var waterQuantity by rememberSaveable { mutableIntStateOf(0) }
     var noEmptyBottles by rememberSaveable { mutableStateOf(false) }
     var showMap by remember { mutableStateOf(false) }
     var showSplash by rememberSaveable { mutableStateOf(true) }
@@ -492,7 +492,7 @@ private fun SpencersApp() {
         bottomBar = {
             NavigationBar(containerColor = Color.White, tonalElevation = 10.dp) {
                 NavigationBarItem(tab == MainTab.Order, { tab = MainTab.Order }, icon = { Icon(Icons.Filled.ShoppingBasket, null) }, label = { Text("Order") })
-                NavigationBarItem(tab == MainTab.Status, { tab = MainTab.Status }, icon = { Icon(Icons.Filled.History, null) }, label = { Text("Activity", maxLines = 1) })
+                NavigationBarItem(tab == MainTab.Status, { tab = MainTab.Status }, icon = { Icon(Icons.Filled.History, null) }, label = { Text("Status", maxLines = 1) })
                 NavigationBarItem(tab == MainTab.Profile, { tab = MainTab.Profile }, icon = { Icon(Icons.Filled.Person, null) }, label = { Text("Profile") })
             }
         },
@@ -510,7 +510,10 @@ private fun SpencersApp() {
                 MainTab.Order -> OrderScreen(
                     profile = profile,
                     selectedProductType = selectedProductType,
-                    onProductTypeChange = { selectedProductType = it },
+                    onProductTypeChange = {
+                        selectedProductType = it
+                        if (it == "water_can" && waterQuantity == 0) waterQuantity = 1
+                    },
                     eggQuantity = eggQuantity,
                     onEggQuantityChange = { eggQuantity = it.coerceIn(1, 360) },
                     waterQuantity = waterQuantity,
@@ -623,11 +626,17 @@ private fun OrderScreen(
                         Text("₹7 per egg", color = Blue, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
                     Column(horizontalAlignment = Alignment.End) {
-                        Text(money(eggTotal), color = Navy, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
-                        Text("Line total", color = Muted, fontSize = 9.sp)
+                        if (selectedProductType == "egg") {
+                            Text(money(eggTotal), color = Navy, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
+                            Text("Line total", color = Muted, fontSize = 9.sp)
+                        } else {
+                            Text("Select", color = Blue, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text("to order", color = Muted, fontSize = 9.sp)
+                        }
                     }
                 }
-                Divider(color = Line)
+                if (selectedProductType == "egg") {
+                    Divider(color = Line)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("Quantity", color = Navy, fontWeight = FontWeight.Bold, fontSize = 11.sp)
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(13.dp)) {
@@ -648,6 +657,7 @@ private fun OrderScreen(
                                 Text("$amount", color = if (eggQuantity == amount) Color.White else Navy, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                             }
                         }
+                    }
                     }
                 }
             }
@@ -676,11 +686,17 @@ private fun OrderScreen(
                         Text("₹30 per can", color = Blue, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
                     Column(horizontalAlignment = Alignment.End) {
-                        Text(money(waterTotal + bottleDeposit), color = Navy, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
-                        Text("Line total", color = Muted, fontSize = 9.sp)
+                        if (selectedProductType == "water_can") {
+                            Text(money(waterTotal + bottleDeposit), color = Navy, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
+                            Text("Line total", color = Muted, fontSize = 9.sp)
+                        } else {
+                            Text("Add +", color = Blue, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold)
+                            Text("Tap to select", color = Muted, fontSize = 9.sp)
+                        }
                     }
                 }
-                Divider(color = Line)
+                if (selectedProductType == "water_can") {
+                    Divider(color = Line)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("Quantity", color = Navy, fontWeight = FontWeight.Bold, fontSize = 11.sp)
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(13.dp)) {
@@ -700,6 +716,7 @@ private fun OrderScreen(
                 PriceRow("Bottle price", "₹150 × ${if (noEmptyBottles) waterQuantity else 0} bottle(s)", money(bottleDeposit))
                 PriceRow("Floor delivery charge", "₹0 × 0 floors × $waterQuantity can(s)", money(floorCharge))
                 Text("Bottle deposit is added only when you cannot return empty bottles.", color = Muted, fontSize = 10.sp, lineHeight = 14.sp)
+                }
             }
         }
 
@@ -838,7 +855,7 @@ private fun ActivityScreen(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(15.dp),
     ) {
-        BrandHeader("YOUR ACCOUNT", "Activity", "Follow every order and view wallet refunds.")
+        BrandHeader("YOUR ORDERS", "Status", "Track your order and see delivery updates.")
         Row(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(15.dp)).background(Color.White).padding(4.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
