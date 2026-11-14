@@ -608,7 +608,7 @@ private fun OrderScreen(
 ) {
     val eggTotal = eggQuantity * PRICE_PER_EGG_PAISE
     val waterTotal = waterQuantity * 3000
-    val bottleDeposit = if (noEmptyBottles) waterQuantity * 15000 else 0
+    val bottleDeposit = if (waterCanIncluded && noEmptyBottles) waterQuantity * 15000 else 0
     val floorCharge = 0
     val total = eggTotal + (if (waterCanIncluded) waterTotal + bottleDeposit + floorCharge else 0)
     var partnerDialog by rememberSaveable { mutableStateOf(false) }
@@ -639,7 +639,7 @@ private fun OrderScreen(
             }
         }
 
-        SectionHeading("Products Available", "Choose what you need")
+        SectionHeading("Products Available", "Fresh Egg is the main item. Water Can is optional.")
         Card(
             colors = CardDefaults.cardColors(containerColor = PaleBlue),
             shape = RoundedCornerShape(21.dp),
