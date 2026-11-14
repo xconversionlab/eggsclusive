@@ -646,7 +646,12 @@ private fun OrderScreen(
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Column(Modifier.width(70.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Box(Modifier.size(48.dp).clip(RoundedCornerShape(14.dp)).background(Color.White), contentAlignment = Alignment.Center) {
-                            Text("🥚", fontSize = 26.sp)
+                            Image(
+                                painter = painterResource(id = R.drawable.egg_icon),
+                                contentDescription = "Fresh egg",
+                                modifier = Modifier.size(38.dp),
+                                contentScale = ContentScale.Fit,
+                            )
                         }
                         Text("Fresh Egg", color = Navy, fontWeight = FontWeight.Bold, fontSize = 9.sp)
                     }
