@@ -110,7 +110,8 @@ private data class CustomerProfile(
 ) {
     val isReady: Boolean get() = name.isNotBlank() && phone.filter(Char::isDigit).length == 10 &&
         phoneVerified && door.isNotBlank() && street.isNotBlank() && area.isNotBlank() &&
-        city.isNotBlank() && pincode.filter(Char::isDigit).length == 6
+        city.isNotBlank() && pincode.filter(Char::isDigit).length == 6 &&
+        (latitude != 0.0 || longitude != 0.0)
     val address: String get() = listOf(door, street, area, city, pincode).filter { it.isNotBlank() }.joinToString(", ")
     fun selectedAddress(): SavedAddress = savedAddresses.firstOrNull { it.id == selectedAddressId }
         ?: SavedAddress("home", addressLabel, door, street, area, landmark, city, pincode, latitude, longitude)
