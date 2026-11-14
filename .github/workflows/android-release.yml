@@ -48,10 +48,37 @@ jobs:
           : "${ANDROID_KEY_ALIAS:?Missing GitHub secret ANDROID_KEY_ALIAS}"
           : "${ANDROID_KEY_PASSWORD:?Missing GitHub secret ANDROID_KEY_PASSWORD}"
           KEYSTORE_PATH="$RUNNER_TEMP/spencers-enterprises-release.jks"
-          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+          if ! printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"; then
+            echo "::error::ANDROID_KEYSTORE_BASE64 could not be decoded. Replace it with the complete contents of ANDROID_KEYSTORE_BASE64.txt."
+            exit 1
+          fi
           chmod 600 "$KEYSTORE_PATH"
-          test -s "$KEYSTORE_PATH"
-          keytool -list -keystore "$KEYSTORE_PATH" -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" >/dev/null
+          if [ ! -s "$KEYSTORE_PATH" ]; then
+            echo "::error::The decoded keystore file is empty."
+            exit 1
+          fi
+
+          EXPECTED_KEYSTORE_SHA256="9d9406ff42523beb50089d78234137100e317874736402367083ee6d43c58e13"
+          ACTUAL_KEYSTORE_SHA256="$(sha256sum "$KEYSTORE_PATH" | awk '{print $1}')"
+          if [ "$ACTUAL_KEYSTORE_SHA256" != "$EXPECTED_KEYSTORE_SHA256" ]; then
+            echo "::error::The decoded keystore does not match the generated signing file. Re-copy the full ANDROID_KEYSTORE_BASE64 secret."
+            exit 1
+          fi
+          echo "Keystore file checksum matches."
+
+          if ! keytool -list -keystore "$KEYSTORE_PATH" -storepass "$ANDROID_KEYSTORE_PASSWORD" >/dev/null 2>"$RUNNER_TEMP/store-validation.err"; then
+            echo "::error::Keystore file is correct, but ANDROID_KEYSTORE_PASSWORD was rejected. Copy the Keystore password exactly from SIGNING_CREDENTIALS.txt."
+            cat "$RUNNER_TEMP/store-validation.err"
+            exit 1
+          fi
+          echo "Keystore password accepted."
+
+          if ! keytool -list -keystore "$KEYSTORE_PATH" -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" >/dev/null 2>"$RUNNER_TEMP/alias-validation.err"; then
+            echo "::error::ANDROID_KEY_ALIAS was not found in this keystore. Set it to spencers-release exactly."
+            cat "$RUNNER_TEMP/alias-validation.err"
+            exit 1
+          fi
+          echo "Key alias accepted."
           echo "ANDROID_KEYSTORE_FILE=$KEYSTORE_PATH" >> "$GITHUB_ENV"
 
       - name: Build signed release APK
