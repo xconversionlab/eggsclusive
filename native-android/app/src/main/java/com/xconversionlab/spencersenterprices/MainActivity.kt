@@ -668,31 +668,30 @@ private fun OrderScreen(
                         Text("Main item", color = Muted, fontSize = 9.sp)
                     }
                 }
-                if (true) {
-                    Divider(color = Line)
+                Divider(color = Line)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Quantity", color = Navy, fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(13.dp)) {
-                        RoundAction(Icons.Filled.Remove, "Decrease egg quantity", eggQuantity > 1) { onEggQuantityChange(eggQuantity - 1) }
-                        Text("$eggQuantity eggs", color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 13.sp)
-                        RoundAction(Icons.Filled.Add, "Increase egg quantity", eggQuantity < 360) { onEggQuantityChange(eggQuantity + 1) }
-                    }
+                Text("Quantity", color = Navy, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(13.dp)) {
+                    RoundAction(Icons.Filled.Remove, "Decrease egg quantity", eggQuantity > 1) { onEggQuantityChange(eggQuantity - 1) }
+                    Text("$eggQuantity eggs", color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 13.sp)
+                    RoundAction(Icons.Filled.Add, "Increase egg quantity", eggQuantity < 360) { onEggQuantityChange(eggQuantity + 1) }
+                }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.fillMaxWidth()) {
-                    listOf(6, 12, 30, 60, 120).forEach { amount ->
-                        Surface(
-                            modifier = Modifier.weight(1f).clip(RoundedCornerShape(9.dp)).clickable { onEggQuantityChange(amount) },
-                            color = if (eggQuantity == amount) Blue else Color.White,
-                            shape = RoundedCornerShape(9.dp),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, if (eggQuantity == amount) Blue else Line),
-                        ) {
-                            Box(Modifier.padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
-                                Text("$amount", color = if (eggQuantity == amount) Color.White else Navy, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                            }
+                listOf(6, 12, 30, 60, 120).forEach { amount ->
+                    Surface(
+                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(9.dp)).clickable { onEggQuantityChange(amount) },
+                        color = if (eggQuantity == amount) Blue else Color.White,
+                        shape = RoundedCornerShape(9.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, if (eggQuantity == amount) Blue else Line),
+                    ) {
+                        Box(Modifier.padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
+                            Text("$amount", color = if (eggQuantity == amount) Color.White else Navy, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                         }
                     }
-                    }
                 }
+                }
+                
             }
         }
 
