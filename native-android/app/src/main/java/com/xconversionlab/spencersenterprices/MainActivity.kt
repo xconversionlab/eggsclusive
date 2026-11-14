@@ -517,6 +517,7 @@ private fun SpencersApp() {
                     waterCanIncluded = waterCanIncluded,
                     onWaterCanToggle = { included ->
                         waterCanIncluded = included
+                        if (included) waterQuantity = 1
                         noEmptyBottles = false
                     },
                     eggQuantity = eggQuantity,
