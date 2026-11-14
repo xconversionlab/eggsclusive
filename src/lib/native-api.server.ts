@@ -207,7 +207,7 @@ export async function createNativeOrder(request: Request, body: unknown) {
   }
 
   // Client-confirmed Water Can rates. Floor charge remains zero until the business configures it.
-  const unitPricePaise = productType === "water_can" ? 3000 : partner.price;
+  const unitPricePaise = productType === "water_can" ? 3000 : 700;
   const bottleDepositPaise = productType === "water_can" && !emptyBottlesToReturn ? quantity * 15000 : 0;
   const floorDeliveryChargePaise = 0;
   const totalPaise = (quantity * unitPricePaise) + bottleDepositPaise + floorDeliveryChargePaise;
@@ -222,7 +222,7 @@ export async function createNativeOrder(request: Request, body: unknown) {
        address_label, address_line, city, pincode, latitude, longitude,
        product_type, bottle_deposit_paise, empty_bottles_to_return, floor_count,
        floor_delivery_charge_paise, payment_status)
-     values ($1,$2,$3,$4,$5,$6,$7,'payment_pending','placed',$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,'pending')`,
+     values ($1,$2,$3,$4,$5,$6,$7,'cash_on_delivery','placed',$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,'pending')`,
     [orderId, customer.id, customer.phone, customer.name, quantity, unitPricePaise, totalPaise,
       partner.shop, partner.rider, partner.phone, encryptOtp(deliveryOtp),
       address.label, address.line, address.city, address.pincode, address.latitude, address.longitude,
@@ -247,7 +247,7 @@ export async function createNativeOrder(request: Request, body: unknown) {
       floorDeliveryChargePaise,
       totalPaise,
       status: "placed",
-      payment: "Payment pending",
+      payment: "Cash on delivery",
       paymentStatus: "pending",
       partnerName: partner.rider,
       partnerPhone: partner.phone,
@@ -284,7 +284,7 @@ export async function listNativeOrders(request: Request) {
       createdAt: new Date(String(row.created_at)).getTime(),
       quantity: Number(row.quantity),
       totalPaise: Number(row.total_paise),
-      payment: String(row.payment_method),
+      payment: String(row.payment_method) === "cash_on_delivery" ? "Cash on delivery" : String(row.payment_method),
       paymentStatus: String(row.payment_status ?? "pending"),
       status: String(row.status),
       productType: String(row.product_type ?? "egg"),
