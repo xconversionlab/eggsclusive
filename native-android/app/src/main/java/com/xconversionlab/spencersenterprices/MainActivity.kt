@@ -42,6 +42,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -556,6 +557,34 @@ private fun SpencersApp() {
 
 }
 
+private fun loadClientWaterCanImage(context: Context): androidx.compose.ui.graphics.ImageBitmap? = runCatching {
+    val encoded = context.assets.open("water_can_product.webp.b64").bufferedReader(Charsets.UTF_8).use { it.readText() }
+        .filterNot(Char::isWhitespace)
+    val bytes = android.util.Base64.decode(encoded, android.util.Base64.DEFAULT)
+    android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+}.getOrNull()
+
+@Composable
+private fun WaterCanProductImage(modifier: Modifier = Modifier) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val bitmap = remember(context) { loadClientWaterCanImage(context) }
+    if (bitmap != null) {
+        Image(
+            bitmap = bitmap,
+            contentDescription = "20 litre water can",
+            modifier = modifier,
+            contentScale = ContentScale.Fit,
+        )
+    } else {
+        Image(
+            painter = painterResource(id = R.drawable.water_can_icon),
+            contentDescription = "20 litre water can",
+            modifier = modifier,
+            contentScale = ContentScale.Fit,
+        )
+    }
+}
+
 @Composable
 private fun OrderScreen(
     profile: CustomerProfile,
@@ -673,12 +702,7 @@ private fun OrderScreen(
             Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Column(Modifier.width(70.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Image(
-                            painter = painterResource(id = R.drawable.water_can_icon),
-                            contentDescription = "20 litre water can",
-                            modifier = Modifier.size(55.dp),
-                            contentScale = ContentScale.Fit,
-                        )
+                        WaterCanProductImage(Modifier.size(55.dp))
                         Text("20L Water Can", color = Navy, fontWeight = FontWeight.Bold, fontSize = 9.sp)
                     }
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
