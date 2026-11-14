@@ -175,12 +175,15 @@ private fun SpencersApp() {
     var orders by remember { mutableStateOf(loadOrders(prefs)) }
     var walletBalance by remember { mutableIntStateOf(0) }
     var walletEntries by remember { mutableStateOf(emptyList<WalletTransaction>()) }
+    // Preserve the old 1.2.x SavedStateRegistry slot while removing the old mutually-exclusive selector.
+    @Suppress("UNUSED_VARIABLE")
+    var legacySavedProductSelection by rememberSaveable { mutableStateOf("egg") }
     var eggQuantity by rememberSaveable { mutableIntStateOf(12) }
-    var waterCanIncluded by rememberSaveable { mutableStateOf(false) }
     var waterQuantity by rememberSaveable { mutableIntStateOf(1) }
     var noEmptyBottles by rememberSaveable { mutableStateOf(false) }
     var showMap by remember { mutableStateOf(false) }
     var showSplash by rememberSaveable { mutableStateOf(true) }
+    var waterCanIncluded by rememberSaveable { mutableStateOf(false) }
     var placingOrder by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
