@@ -176,6 +176,7 @@ fun MapPickerScreen(
         )
     }
     var zoom by remember { mutableIntStateOf(16) }
+    var locationChosen by remember { mutableStateOf(hasSavedPin) }
     var locating by remember { mutableStateOf(false) }
     var message by remember {
         mutableStateOf(
@@ -190,6 +191,7 @@ fun MapPickerScreen(
             message = "Could not get your location. Drag the map pin to select it manually."
         } else {
             center = MapPoint(location.latitude, location.longitude)
+            locationChosen = true
             message = "Your current location is pinned. Drag the map to fine-tune it."
         }
     }
@@ -261,6 +263,7 @@ fun MapPickerScreen(
                         val current = center
                         val (worldX, worldY) = project(current, zoom)
                         center = unproject(worldX - drag.x / density, worldY - drag.y / density, zoom)
+                        locationChosen = true
                     }
                 },
             ) {
@@ -320,6 +323,7 @@ fun MapPickerScreen(
         Spacer(Modifier.height(8.dp))
         Button(
             onClick = { onConfirm(center.lat, center.lng) },
+            enabled = locationChosen,
             modifier = Modifier.fillMaxWidth().height(53.dp),
             shape = RoundedCornerShape(15.dp),
             colors = ButtonDefaults.buttonColors(containerColor = Navy),
