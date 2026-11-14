@@ -129,6 +129,7 @@ private data class CustomerProfile(
 private data class CustomerOrder(
     val id: String, val createdAt: Long, val quantity: Int, val slot: String,
     val payment: String, val totalPaise: Int, val status: String,
+    val waterCanQuantity: Int = 0,
     val partnerName: String = "",
     val partnerPhone: String = "",
     val deliveryOtp: String = "",
@@ -174,9 +175,9 @@ private fun SpencersApp() {
     var orders by remember { mutableStateOf(loadOrders(prefs)) }
     var walletBalance by remember { mutableIntStateOf(0) }
     var walletEntries by remember { mutableStateOf(emptyList<WalletTransaction>()) }
-    var selectedProductType by rememberSaveable { mutableStateOf("egg") }
     var eggQuantity by rememberSaveable { mutableIntStateOf(12) }
-    var waterQuantity by rememberSaveable { mutableIntStateOf(0) }
+    var waterCanIncluded by rememberSaveable { mutableStateOf(false) }
+    var waterQuantity by rememberSaveable { mutableIntStateOf(1) }
     var noEmptyBottles by rememberSaveable { mutableStateOf(false) }
     var showMap by remember { mutableStateOf(false) }
     var showSplash by rememberSaveable { mutableStateOf(true) }
@@ -234,10 +235,10 @@ private fun SpencersApp() {
             scope.launch { snackbar.showSnackbar("Complete your verified mobile profile and delivery address first.") }
             return
         }
-        val orderQuantity = if (selectedProductType == "water_can") waterQuantity else eggQuantity
-        val unitPrice = if (selectedProductType == "water_can") 3000 else PRICE_PER_EGG_PAISE
-        val bottleDeposit = if (selectedProductType == "water_can" && noEmptyBottles) orderQuantity * 15000 else 0
-        val estimatedTotal = (orderQuantity * unitPrice) + bottleDeposit
+        val eggTotal = eggQuantity * PRICE_PER_EGG_PAISE
+        val waterTotal = if (waterCanIncluded) waterQuantity * 3000 else 0
+        val bottleDeposit = if (waterCanIncluded && noEmptyBottles) waterQuantity * 15000 else 0
+        val estimatedTotal = eggTotal + waterTotal + bottleDeposit
 
         placingOrder = true
         scope.launch {
@@ -253,9 +254,9 @@ private fun SpencersApp() {
                     .put("latitude", profile.latitude)
                     .put("longitude", profile.longitude)
                 val requestBody = JSONObject()
-                    .put("productType", selectedProductType)
-                    .put("quantity", orderQuantity)
-                    .put("emptyBottlesToReturn", !noEmptyBottles)
+                    .put("eggQuantity", eggQuantity)
+                    .put("waterCanQuantity", if (waterCanIncluded) waterQuantity else 0)
+                    .put("emptyBottlesToReturn", if (waterCanIncluded) !noEmptyBottles else true)
                     .put("floorCount", 0)
                     .put("address", addressJson)
                 val response = withContext(Dispatchers.IO) {
@@ -269,7 +270,7 @@ private fun SpencersApp() {
                 val placed = CustomerOrder(
                     id = orderId,
                     createdAt = now,
-                    quantity = remote.optInt("quantity", orderQuantity),
+                    quantity = remote.optInt("eggQuantity", remote.optInt("quantity", eggQuantity)),
                     slot = "",
                     payment = remote.optString("payment", "Cash on delivery"),
                     totalPaise = total,
@@ -279,7 +280,8 @@ private fun SpencersApp() {
                     deliveryOtp = remote.optString("deliveryOtp"),
                     addressLabel = remote.optString("addressLabel", profile.addressLabel),
                     deliveryAddress = remote.optString("deliveryAddress", profile.address),
-                    productType = remote.optString("productType", selectedProductType),
+                    productType = "egg",
+                    waterCanQuantity = remote.optInt("waterCanQuantity", if (waterCanIncluded) waterQuantity else 0),
                     bottleDepositPaise = remote.optInt("bottleDepositPaise", bottleDeposit),
                     floorCount = remote.optInt("floorCount", 0),
                 )
@@ -429,8 +431,9 @@ private fun SpencersApp() {
                         CustomerOrder(
                             id = item.optString("id"),
                             createdAt = item.optLong("createdAt"),
-                            quantity = item.optInt("quantity"),
+                            quantity = item.optInt("eggQuantity", item.optInt("quantity")),
                             slot = "",
+                            waterCanQuantity = item.optInt("waterCanQuantity", 0),
                             payment = item.optString("payment"),
                             totalPaise = item.optInt("totalPaise"),
                             status = displayStatus,
@@ -511,10 +514,10 @@ private fun SpencersApp() {
             when (activeTab) {
                 MainTab.Order -> OrderScreen(
                     profile = profile,
-                    selectedProductType = selectedProductType,
-                    onProductTypeChange = {
-                        selectedProductType = it
-                        if (it == "water_can" && waterQuantity == 0) waterQuantity = 1
+                    waterCanIncluded = waterCanIncluded,
+                    onWaterCanToggle = { included ->
+                        waterCanIncluded = included
+                        if (!included) noEmptyBottles = false
                     },
                     eggQuantity = eggQuantity,
                     onEggQuantityChange = { eggQuantity = it.coerceIn(1, 360) },
@@ -589,8 +592,8 @@ private fun WaterCanProductImage(modifier: Modifier = Modifier) {
 @Composable
 private fun OrderScreen(
     profile: CustomerProfile,
-    selectedProductType: String,
-    onProductTypeChange: (String) -> Unit,
+    waterCanIncluded: Boolean,
+    onWaterCanToggle: (Boolean) -> Unit,
     eggQuantity: Int,
     onEggQuantityChange: (Int) -> Unit,
     waterQuantity: Int,
@@ -606,7 +609,7 @@ private fun OrderScreen(
     val waterTotal = waterQuantity * 3000
     val bottleDeposit = if (noEmptyBottles) waterQuantity * 15000 else 0
     val floorCharge = 0
-    val total = if (selectedProductType == "water_can") waterTotal + bottleDeposit + floorCharge else eggTotal
+    val total = eggTotal + (if (waterCanIncluded) waterTotal + bottleDeposit + floorCharge else 0)
     var partnerDialog by rememberSaveable { mutableStateOf(false) }
     var partnerContactName by rememberSaveable { mutableStateOf("") }
     var partnerContactPhone by rememberSaveable { mutableStateOf("") }
@@ -637,11 +640,11 @@ private fun OrderScreen(
 
         SectionHeading("Products Available", "Choose what you need")
         Card(
-            colors = CardDefaults.cardColors(containerColor = if (selectedProductType == "egg") PaleBlue else Color.White),
+            colors = CardDefaults.cardColors(containerColor = PaleBlue),
             shape = RoundedCornerShape(21.dp),
             elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-            modifier = Modifier.fillMaxWidth().clickable { onProductTypeChange("egg") },
-            border = androidx.compose.foundation.BorderStroke(if (selectedProductType == "egg") 1.5.dp else 1.dp, if (selectedProductType == "egg") Blue else Line),
+            modifier = Modifier.fillMaxWidth(),
+            border = androidx.compose.foundation.BorderStroke(1.5.dp, Blue),
         ) {
             Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -661,16 +664,11 @@ private fun OrderScreen(
                         Text("₹7 per egg", color = Blue, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
                     Column(horizontalAlignment = Alignment.End) {
-                        if (selectedProductType == "egg") {
-                            Text(money(eggTotal), color = Navy, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
-                            Text("Line total", color = Muted, fontSize = 9.sp)
-                        } else {
-                            Text("Select", color = Blue, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            Text("to order", color = Muted, fontSize = 9.sp)
-                        }
+                        Text(money(eggTotal), color = Navy, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
+                        Text("Main item", color = Muted, fontSize = 9.sp)
                     }
                 }
-                if (selectedProductType == "egg") {
+                if (true) {
                     Divider(color = Line)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("Quantity", color = Navy, fontWeight = FontWeight.Bold, fontSize = 11.sp)
@@ -699,33 +697,37 @@ private fun OrderScreen(
         }
 
         Card(
-            colors = CardDefaults.cardColors(containerColor = if (selectedProductType == "water_can") PaleBlue else Color.White),
+            colors = CardDefaults.cardColors(containerColor = if (waterCanIncluded) PaleBlue else Color.White),
             shape = RoundedCornerShape(21.dp),
             elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-            modifier = Modifier.fillMaxWidth().clickable { onProductTypeChange("water_can") },
-            border = androidx.compose.foundation.BorderStroke(if (selectedProductType == "water_can") 1.5.dp else 1.dp, if (selectedProductType == "water_can") Blue else Line),
+            modifier = Modifier.fillMaxWidth(),
+            border = androidx.compose.foundation.BorderStroke(if (waterCanIncluded) 1.5.dp else 1.dp, if (waterCanIncluded) Blue else Line),
         ) {
             Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(
+                    Modifier.fillMaxWidth().clickable { onWaterCanToggle(!waterCanIncluded) },
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
                     Column(Modifier.width(70.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         WaterCanProductImage(Modifier.size(55.dp))
                         Text("20L Water Can", color = Navy, fontWeight = FontWeight.Bold, fontSize = 9.sp)
                     }
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text("Water Can", color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 17.sp)
+                        Text("Water Can · Optional", color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 17.sp)
                         Text("₹30 per can", color = Blue, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
                     Column(horizontalAlignment = Alignment.End) {
-                        if (selectedProductType == "water_can") {
+                        if (waterCanIncluded) {
                             Text(money(waterTotal + bottleDeposit), color = Navy, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
-                            Text("Line total", color = Muted, fontSize = 9.sp)
+                            Text("Added · Tap to remove", color = Muted, fontSize = 9.sp)
                         } else {
                             Text("Add +", color = Blue, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold)
-                            Text("Tap to select", color = Muted, fontSize = 9.sp)
+                            Text("Optional", color = Muted, fontSize = 9.sp)
                         }
                     }
                 }
-                if (selectedProductType == "water_can") {
+                if (waterCanIncluded) {
                     Divider(color = Line)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("Quantity", color = Navy, fontWeight = FontWeight.Bold, fontSize = 11.sp)
@@ -792,7 +794,11 @@ private fun OrderScreen(
         Card(colors = CardDefaults.cardColors(containerColor = Navy), shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(17.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("ORDER SUMMARY", color = Color(0xFF8DCFFF), fontWeight = FontWeight.ExtraBold, fontSize = 10.sp, letterSpacing = 1.4.sp)
-                if (selectedProductType == "water_can") {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Fresh Egg × $eggQuantity", color = Color.White, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                    Text(money(eggTotal), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                }
+                if (waterCanIncluded) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Water Can × $waterQuantity", color = Color.White, fontSize = 13.sp, modifier = Modifier.weight(1f))
                         Text(money(waterTotal), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
@@ -804,11 +810,6 @@ private fun OrderScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Floor delivery charge", color = Color.White.copy(alpha = .78f), fontSize = 12.sp, modifier = Modifier.weight(1f))
                         Text(money(floorCharge), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                    }
-                } else {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Fresh Egg × $eggQuantity", color = Color.White, fontSize = 13.sp, modifier = Modifier.weight(1f))
-                        Text(money(eggTotal), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                     }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -935,16 +936,20 @@ private fun ActivityScreen(
                         }
                         Divider(color = Line)
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                (if (order.productType == "water_can") "Water Can" else "Fresh Egg") + " × ${order.quantity}",
-                                color = Ink,
-                                fontSize = 12.sp,
-                                modifier = Modifier.weight(1f),
-                            )
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(
+                                    (if (order.productType == "water_can") "Legacy Water Can" else "Fresh Egg") + " × ${order.quantity}",
+                                    color = Ink,
+                                    fontSize = 12.sp,
+                                )
+                                if (order.waterCanQuantity > 0) {
+                                    Text("Water Can × ${order.waterCanQuantity}", color = Ink, fontSize = 12.sp)
+                                }
+                            }
                             Text(money(order.totalPaise), color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
                         }
                         Text(order.payment.ifBlank { "Cash on delivery" }, color = Muted, fontSize = 10.sp)
-                        if (order.productType == "water_can" && order.bottleDepositPaise > 0) {
+                        if ((order.productType == "water_can" || order.waterCanQuantity > 0) && order.bottleDepositPaise > 0) {
                             Text("Bottle deposit included: ${money(order.bottleDepositPaise)}", color = Muted, fontSize = 10.sp)
                         }
                         if (cancelled) {
@@ -1437,6 +1442,7 @@ private fun loadOrders(prefs: SharedPreferences): List<CustomerOrder> = try {
             createdAt = item.optLong("createdAt"),
             quantity = item.optInt("quantity"),
             slot = item.optString("slot"),
+            waterCanQuantity = item.optInt("waterCanQuantity", 0),
             payment = item.optString("payment"),
             totalPaise = item.optInt("totalPaise"),
             status = item.optString("status", "Order placed"),
@@ -1458,7 +1464,7 @@ private fun saveOrders(prefs: SharedPreferences, orders: List<CustomerOrder>) {
     orders.forEach { order ->
         array.put(JSONObject().apply {
             put("id", order.id); put("createdAt", order.createdAt); put("quantity", order.quantity)
-            put("slot", order.slot); put("payment", order.payment); put("totalPaise", order.totalPaise)
+            put("slot", order.slot); put("waterCanQuantity", order.waterCanQuantity); put("payment", order.payment); put("totalPaise", order.totalPaise)
             put("status", order.status); put("partnerName", order.partnerName); put("partnerPhone", order.partnerPhone)
             put("deliveryOtp", order.deliveryOtp); put("addressLabel", order.addressLabel)
             put("deliveryAddress", order.deliveryAddress); put("refundApplied", order.refundApplied)
