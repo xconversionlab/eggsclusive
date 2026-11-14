@@ -314,7 +314,7 @@ private fun SpencersApp() {
                     createdAt = now,
                     quantity = remote.optInt("quantity", orderQuantity),
                     slot = "",
-                    payment = remote.optString("payment", "Payment pending"),
+                    payment = remote.optString("payment", "Cash on delivery"),
                     totalPaise = total,
                     status = "Order placed",
                     partnerName = remote.optString("partnerName"),
@@ -813,6 +813,10 @@ private fun OrderScreen(
                         Text(money(eggTotal), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                     }
                 }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Payment method", color = Color.White.copy(alpha = .78f), fontSize = 12.sp, modifier = Modifier.weight(1f))
+                    Text("Cash on delivery", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
                 Divider(color = Color.White.copy(alpha = .22f))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Total", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 15.sp, modifier = Modifier.weight(1f))
@@ -833,7 +837,7 @@ private fun OrderScreen(
         if (partner == null) {
             Text("Ordering is not available for the selected map location yet.", color = Color(0xFF9A3412), fontSize = 11.sp)
         }
-        Text("Payment processing will be shown once the business payment gateway is connected.", color = Muted, fontSize = 10.sp, lineHeight = 15.sp)
+        Text("Pay the delivery partner in cash when your order arrives. No online payment is taken in this app.", color = Muted, fontSize = 10.sp, lineHeight = 15.sp)
     }
 
     if (partnerDialog) {
@@ -944,6 +948,7 @@ private fun ActivityScreen(
                             )
                             Text(money(order.totalPaise), color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
                         }
+                        Text(order.payment.ifBlank { "Cash on delivery" }, color = Muted, fontSize = 10.sp)
                         if (order.productType == "water_can" && order.bottleDepositPaise > 0) {
                             Text("Bottle deposit included: ${money(order.bottleDepositPaise)}", color = Muted, fontSize = 10.sp)
                         }
