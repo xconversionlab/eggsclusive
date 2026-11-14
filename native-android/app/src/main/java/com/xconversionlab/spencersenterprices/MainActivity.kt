@@ -286,7 +286,7 @@ private fun SpencersApp() {
                 saveOrders(prefs, orders)
                 tab = MainTab.Status
                 historyPage = "orders"
-                snackbar.showSnackbar("Order " + orderId + " placed. Track updates in Activity.")
+                snackbar.showSnackbar("Order " + orderId + " placed. Track updates in Status.")
             } catch (error: Exception) {
                 snackbar.showSnackbar(error.message ?: "Could not place the order. Please try again.")
             } finally {
