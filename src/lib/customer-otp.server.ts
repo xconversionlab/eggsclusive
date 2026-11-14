@@ -245,8 +245,15 @@ async function startTwilioVerify(phone: string): Promise<SmsSendResult> {
   }
   const result = await twilioVerifyRequest(config, "Verifications", { To: phone, Channel: "sms" });
   if (!result.ok) {
+    if (result.code === 8021) {
+      return {
+        ok: false,
+        status: 503,
+        error: "The Twilio API key is missing Verify permissions. Enable twilio/verify/verification/create and twilio/verify/verification-check/create for this key in Twilio Console.",
+      };
+    }
     if (result.httpStatus === 401 || result.httpStatus === 403) {
-      return { ok: false, status: 503, error: "Twilio authentication failed. Check the API key permissions and credentials in Vercel." };
+      return { ok: false, status: 503, error: "Twilio authentication was rejected. Check that the API key SID and secret belong together and that the key is enabled." };
     }
     if (result.code === 60200 || result.code === 60203 || result.code === 60212) {
       return { ok: false, status: 429, error: "Twilio could not start this verification. Check the recipient, trial restrictions and Verify limits." };
@@ -270,8 +277,16 @@ async function checkTwilioVerify(phone: string, code: string): Promise<VerifyChe
   }
   const result = await twilioVerifyRequest(config, "VerificationCheck", { To: phone, Code: code });
   if (!result.ok) {
+    if (result.code === 8021) {
+      return {
+        ok: false,
+        status: 503,
+        error: "The Twilio API key is missing the Verify Verification Check Create permission. Enable twilio/verify/verification-check/create for this key in Twilio Console.",
+        countAttempt: false,
+      };
+    }
     if (result.httpStatus === 401 || result.httpStatus === 403) {
-      return { ok: false, status: 503, error: "Twilio authentication failed. Check the Verify API key permissions and credentials.", countAttempt: false };
+      return { ok: false, status: 503, error: "Twilio authentication was rejected. Check that the API key SID and secret belong together and that the key is enabled.", countAttempt: false };
     }
     if (result.httpStatus === 404) {
       return { ok: false, status: 400, error: "That OTP has expired or was already used. Request a new code.", countAttempt: false };
