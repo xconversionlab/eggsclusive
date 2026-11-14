@@ -168,10 +168,21 @@ fun MapPickerScreen(
     onConfirm: (Double, Double) -> Unit,
 ) {
     val context = LocalContext.current
-    var center by remember { mutableStateOf(MapPoint(initialLatitude, initialLongitude)) }
+    val hasSavedPin = initialLatitude != 0.0 || initialLongitude != 0.0
+    var center by remember {
+        mutableStateOf(
+            if (hasSavedPin) MapPoint(initialLatitude, initialLongitude)
+            else MapPoint(20.5937, 78.9629),
+        )
+    }
     var zoom by remember { mutableIntStateOf(16) }
     var locating by remember { mutableStateOf(false) }
-    var message by remember { mutableStateOf("") }
+    var message by remember {
+        mutableStateOf(
+            if (hasSavedPin) ""
+            else "Use my location or move the map pin to your delivery address.",
+        )
+    }
 
     fun acceptLocation(location: Location?) {
         locating = false
