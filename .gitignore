@@ -4,3 +4,6 @@ node_modules/
 .env
 .env.*
 .vercel/output/
+*.jks
+*.keystore
+*.p12
