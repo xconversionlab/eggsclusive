@@ -99,7 +99,7 @@ jobs:
       - name: Upload production APK
         uses: actions/upload-artifact@v4
         with:
-          name: Spencers-Enterprises-Android-Release-1.2.6
+          name: Spencers-Enterprises-Android-Release-1.2.7
           path: |
             native-android/app/build/outputs/apk/release/app-release.apk
             native-android/app/build/outputs/apk/release/app-release.apk.sha256
