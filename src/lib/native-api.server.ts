@@ -83,11 +83,14 @@ function safeAddress(input: unknown) {
   const area = text("area", 120);
   const label = text("label", 40) || "Home";
   const landmark = text("landmark", 120);
-  const latitude = typeof value.latitude === "number" && Number.isFinite(value.latitude) ? value.latitude : null;
-  const longitude = typeof value.longitude === "number" && Number.isFinite(value.longitude) ? value.longitude : null;
-  if (!door || !street || !area || !city || !/^\d{6}$/.test(pincode) || latitude === null || longitude === null) return null;
-  if (Math.abs(latitude) > 90 || Math.abs(longitude) > 180) return null;
-  return { label, door, street, area, landmark, city, pincode, latitude, longitude,
+  const rawLatitude = typeof value.latitude === "number" && Number.isFinite(value.latitude) ? value.latitude : null;
+  const rawLongitude = typeof value.longitude === "number" && Number.isFinite(value.longitude) ? value.longitude : null;
+  if (!door || !street || !area || !city || !/^\d{6}$/.test(pincode)) return null;
+  if ((rawLatitude === null) !== (rawLongitude === null)) return null;
+  if (rawLatitude !== null && (Math.abs(rawLatitude) > 90 || Math.abs(rawLongitude!) > 180)) return null;
+  const hasPin = rawLatitude !== null && rawLongitude !== null && (rawLatitude !== 0 || rawLongitude !== 0);
+  return { label, door, street, area, landmark, city, pincode,
+    latitude: hasPin ? rawLatitude : null, longitude: hasPin ? rawLongitude : null,
     line: [door, street, area, landmark].filter(Boolean).join(", ") };
 }
 
@@ -157,6 +160,83 @@ async function dispatchOrderStatusSms(
   }
 }
 
+export type NativeCatalogItem = { unitPricePaise: number; packLabel: string; enabled: boolean };
+
+async function readNativeCatalog(sql: Awaited<ReturnType<typeof getSql>>) {
+  const rows = await sql.query<Row>(
+    "select product_key, unit_price_paise, pack_label, enabled from native_product_catalog where product_key in ('milk','curd')",
+  );
+  const byKey = new Map(rows.map((row) => [String(row.product_key), row]));
+  const item = (key: "milk" | "curd"): NativeCatalogItem => {
+    const row = byKey.get(key);
+    return {
+      unitPricePaise: Number(row?.unit_price_paise ?? 0),
+      packLabel: String(row?.pack_label ?? ""),
+      enabled: Boolean(row?.enabled) && Number(row?.unit_price_paise ?? 0) > 0,
+    };
+  };
+  return {
+    egg: { unitPricePaise: 700, packLabel: "per egg", enabled: true },
+    water: { unitPricePaise: 3000, packLabel: "20-litre can", enabled: true },
+    milk: item("milk"),
+    curd: item("curd"),
+  };
+}
+
+export async function getNativeCatalog() {
+  requirePersistentDatabase();
+  const sql = await getSql();
+  return { ok: true as const, catalog: await readNativeCatalog(sql) };
+}
+
+export async function getOperationsNativeCatalog(request: Request) {
+  requirePersistentDatabase();
+  if (!isOperationsRequest(request)) {
+    return { ok: false as const, status: 401, error: "Operations authorization failed." };
+  }
+  const sql = await getSql();
+  return { ok: true as const, catalog: await readNativeCatalog(sql) };
+}
+
+export async function updateOperationsNativeCatalog(request: Request, body: unknown) {
+  requirePersistentDatabase();
+  if (!isOperationsRequest(request)) {
+    return { ok: false as const, status: 401, error: "Operations authorization failed." };
+  }
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return { ok: false as const, status: 400, error: "Invalid product pricing." };
+  }
+  const value = body as Record<string, unknown>;
+  const sql = await getSql();
+  for (const key of ["milk", "curd"] as const) {
+    const item = value[key];
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      return { ok: false as const, status: 400, error: `Missing ${key} pricing details.` };
+    }
+    const fields = item as Record<string, unknown>;
+    const unitPricePaise = Number(fields.unitPricePaise);
+    const packLabel = typeof fields.packLabel === "string" ? fields.packLabel.trim().slice(0, 60) : "";
+    const enabled = fields.enabled === true;
+    if (!Number.isInteger(unitPricePaise) || unitPricePaise < 0 || unitPricePaise > 100000000) {
+      return { ok: false as const, status: 400, error: `Enter a valid ${key} price.` };
+    }
+    if (enabled && (unitPricePaise < 1 || !packLabel)) {
+      return { ok: false as const, status: 400, error: `Set a price and pack size before enabling ${key}.` };
+    }
+    await sql.query(
+      `insert into native_product_catalog (product_key, unit_price_paise, pack_label, enabled, updated_at)
+       values ($1,$2,$3,$4,now())
+       on conflict (product_key) do update set
+         unit_price_paise = excluded.unit_price_paise,
+         pack_label = excluded.pack_label,
+         enabled = excluded.enabled,
+         updated_at = now()`,
+      [key, unitPricePaise, packLabel, enabled],
+    );
+  }
+  return { ok: true as const, catalog: await readNativeCatalog(sql) };
+}
+
 export async function createNativeOrder(request: Request, body: unknown) {
   requirePersistentDatabase();
   const customer = await authenticateNativeRequest(request);
@@ -165,56 +245,63 @@ export async function createNativeOrder(request: Request, body: unknown) {
     return { ok: false as const, status: 400, error: "Invalid order details." };
   }
   const value = body as Record<string, unknown>;
-  const eggQuantity = Number(
-    value.eggQuantity ?? (value.productType === "egg" ? value.quantity : Number.NaN),
-  );
-  const waterCanQuantity = Number(
-    value.waterCanQuantity ?? (value.productType === "water_can" ? value.quantity : 0),
-  );
+  const eggQuantity = Number(value.eggQuantity ?? (value.productType === "egg" ? value.quantity : 0));
+  const waterCanQuantity = Number(value.waterCanQuantity ?? (value.productType === "water_can" ? value.quantity : 0));
+  const milkQuantity = Number(value.milkQuantity ?? 0);
+  const curdQuantity = Number(value.curdQuantity ?? 0);
   const address = safeAddress(value.address);
   const emptyBottlesToReturn = value.emptyBottlesToReturn !== false;
   const floorCount = Number.isInteger(value.floorCount) ? Number(value.floorCount) : 0;
 
-  // Fresh Egg is the mandatory primary product. Water Can is an optional add-on.
-  if (!Number.isInteger(eggQuantity) || eggQuantity < 1 || eggQuantity > 360 ||
+  if (!Number.isInteger(eggQuantity) || eggQuantity < 0 || eggQuantity > 360 ||
       !Number.isInteger(waterCanQuantity) || waterCanQuantity < 0 || waterCanQuantity > 30 ||
+      !Number.isInteger(milkQuantity) || milkQuantity < 0 || milkQuantity > 60 ||
+      !Number.isInteger(curdQuantity) || curdQuantity < 0 || curdQuantity > 60 ||
+      eggQuantity + waterCanQuantity + milkQuantity + curdQuantity === 0 ||
       !address || floorCount < 0 || floorCount > 100) {
-    return {
-      ok: false as const,
-      status: 400,
-      error: "Choose at least one Fresh Egg, check both quantities and complete the delivery address.",
-    };
+    return { ok: false as const, status: 400, error: "Choose at least one product and complete the delivery address." };
   }
 
-  // Client-confirmed prices: Fresh Egg ₹7, Water Can ₹30, refundable-can deposit ₹150.
-  const eggUnitPricePaise = 700;
-  const waterCanUnitPricePaise = 3000;
-  const bottleDepositPaise = waterCanQuantity > 0 && !emptyBottlesToReturn
-    ? waterCanQuantity * 15000
-    : 0;
+  const sql = await getSql();
+  const catalog = await readNativeCatalog(sql);
+  if (milkQuantity > 0 && !catalog.milk.enabled) {
+    return { ok: false as const, status: 409, error: "Milk is not available yet. Please refresh the product list." };
+  }
+  if (curdQuantity > 0 && !catalog.curd.enabled) {
+    return { ok: false as const, status: 409, error: "Curd is not available yet. Please refresh the product list." };
+  }
+
+  // Prices come from the server-side catalogue, never from the customer request.
+  const eggUnitPricePaise = catalog.egg.unitPricePaise;
+  const waterCanUnitPricePaise = catalog.water.unitPricePaise;
+  const milkUnitPricePaise = milkQuantity > 0 ? catalog.milk.unitPricePaise : 0;
+  const curdUnitPricePaise = curdQuantity > 0 ? catalog.curd.unitPricePaise : 0;
+  const bottleDepositPaise = waterCanQuantity > 0 && !emptyBottlesToReturn ? waterCanQuantity * 15000 : 0;
   const floorDeliveryChargePaise = 0;
   const totalPaise =
-    (eggQuantity * eggUnitPricePaise) +
-    (waterCanQuantity * waterCanUnitPricePaise) +
-    bottleDepositPaise +
-    floorDeliveryChargePaise;
+    eggQuantity * eggUnitPricePaise + waterCanQuantity * waterCanUnitPricePaise +
+    milkQuantity * milkUnitPricePaise + curdQuantity * curdUnitPricePaise +
+    bottleDepositPaise + floorDeliveryChargePaise;
+  if (totalPaise <= 0) {
+    return { ok: false as const, status: 400, error: "The order total must be greater than zero." };
+  }
+
   const orderId = `EG-${new Date().toISOString().slice(2, 10).replace(/-/g, "")}-${randomBytes(3).toString("hex").toUpperCase()}`;
   const deliveryOtp = String(randomInt(100000, 1000000));
-  const sql = await getSql();
-
   await sql.query(
     `insert into native_orders
       (id, customer_id, customer_phone, customer_name, quantity, unit_price_paise, total_paise,
        payment_method, status, partner_shop, partner_name, partner_phone, delivery_otp_encrypted,
-       address_label, address_line, city, pincode, latitude, longitude,
-       product_type, water_can_quantity, bottle_deposit_paise, empty_bottles_to_return, floor_count,
-       floor_delivery_charge_paise, payment_status)
+       address_label, address_line, city, pincode, latitude, longitude, product_type,
+       water_can_quantity, milk_quantity, curd_quantity, milk_unit_price_paise, curd_unit_price_paise,
+       bottle_deposit_paise, empty_bottles_to_return, floor_count, floor_delivery_charge_paise, payment_status)
      values ($1,$2,$3,$4,$5,$6,$7,'cash_on_delivery','placed',$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,
-       'egg',$18,$19,$20,$21,$22,'pending')`,
+       'egg',$18,$19,$20,$21,$22,$23,$24,$25,$26,'pending')`,
     [orderId, customer.id, customer.phone, customer.name, eggQuantity, eggUnitPricePaise, totalPaise,
-      "", "", "", encryptOtp(deliveryOtp),
-      address.label, address.line, address.city, address.pincode, address.latitude, address.longitude,
-      waterCanQuantity, bottleDepositPaise, emptyBottlesToReturn, floorCount, floorDeliveryChargePaise],
+      "", "", "", encryptOtp(deliveryOtp), address.label, address.line, address.city, address.pincode,
+      address.latitude, address.longitude, waterCanQuantity, milkQuantity, curdQuantity,
+      milkUnitPricePaise, curdUnitPricePaise, bottleDepositPaise, emptyBottlesToReturn,
+      floorCount, floorDeliveryChargePaise],
   );
   await sql.query(
     "insert into native_order_events (id, order_id, from_status, to_status, note, actor) values ($1,$2,null,'placed','Order placed by customer','customer')",
@@ -230,8 +317,12 @@ export async function createNativeOrder(request: Request, body: unknown) {
       quantity: eggQuantity,
       eggQuantity,
       waterCanQuantity,
+      milkQuantity,
+      curdQuantity,
       unitPricePaise: eggUnitPricePaise,
       waterCanUnitPricePaise,
+      milkUnitPricePaise,
+      curdUnitPricePaise,
       bottleDepositPaise,
       emptyBottlesToReturn,
       floorCount,
@@ -256,7 +347,8 @@ export async function listNativeOrders(request: Request) {
   const rows = await sql.query<Row>(
     `select id, created_at, quantity, total_paise, payment_method, payment_status, status,
             partner_name, partner_phone, delivery_otp_encrypted, address_label,
-            address_line, city, pincode, product_type, water_can_quantity, bottle_deposit_paise, floor_count,
+            address_line, city, pincode, product_type, water_can_quantity, milk_quantity, curd_quantity,
+            milk_unit_price_paise, curd_unit_price_paise, bottle_deposit_paise, floor_count,
             floor_delivery_charge_paise, empty_bottles_to_return,
             exists(select 1 from native_wallet_transactions t where t.order_id = native_orders.id and t.transaction_type = 'refund') as refund_applied
        from native_orders
@@ -281,6 +373,10 @@ export async function listNativeOrders(request: Request) {
       productType: String(row.product_type ?? "egg"),
       eggQuantity: Number(row.quantity),
       waterCanQuantity: Number(row.water_can_quantity ?? 0),
+      milkQuantity: Number(row.milk_quantity ?? 0),
+      curdQuantity: Number(row.curd_quantity ?? 0),
+      milkUnitPricePaise: Number(row.milk_unit_price_paise ?? 0),
+      curdUnitPricePaise: Number(row.curd_unit_price_paise ?? 0),
       bottleDepositPaise: Number(row.bottle_deposit_paise ?? 0),
       floorCount: Number(row.floor_count ?? 0),
       floorDeliveryChargePaise: Number(row.floor_delivery_charge_paise ?? 0),
@@ -397,7 +493,8 @@ export async function listOperationsNativeOrders(request: Request) {
   }
   const sql = await getSql();
   const rows = await sql.query<Row>(
-    `select id, customer_name, customer_phone, quantity, water_can_quantity, bottle_deposit_paise,
+    `select id, customer_name, customer_phone, quantity, water_can_quantity, milk_quantity, curd_quantity,
+            milk_unit_price_paise, curd_unit_price_paise, bottle_deposit_paise,
             total_paise, payment_method, status,
             partner_shop, partner_name, partner_phone, address_label, address_line, city, pincode,
             created_at, status_changed_at
@@ -413,6 +510,10 @@ export async function listOperationsNativeOrders(request: Request) {
       quantity: Number(row.quantity),
       eggQuantity: Number(row.quantity),
       waterCanQuantity: Number(row.water_can_quantity ?? 0),
+      milkQuantity: Number(row.milk_quantity ?? 0),
+      curdQuantity: Number(row.curd_quantity ?? 0),
+      milkUnitPricePaise: Number(row.milk_unit_price_paise ?? 0),
+      curdUnitPricePaise: Number(row.curd_unit_price_paise ?? 0),
       bottleDepositPaise: Number(row.bottle_deposit_paise ?? 0),
       totalPaise: Number(row.total_paise),
       payment: row.payment_method,
