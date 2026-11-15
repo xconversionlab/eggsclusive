@@ -3,6 +3,9 @@ import {
   apiJson,
   createNativeComplaint,
   createNativeOrder,
+  getNativeCatalog,
+  getOperationsNativeCatalog,
+  updateOperationsNativeCatalog,
   getNativeWallet,
   listNativeCustomerAddresses,
   listNativeOrders,
@@ -28,6 +31,11 @@ export const Route = createFileRoute("/api/native/$")({
               persistentDatabaseReady: dbSource === "neon",
               otpConfigured: isCustomerAuthConfigured(),
             });
+          }
+          if (pathname === "/api/native/catalog") return apiJson(await getNativeCatalog());
+          if (pathname === "/api/native/ops/catalog") {
+            const result = await getOperationsNativeCatalog(request);
+            return result.ok ? apiJson(result) : apiJson({ ok: false, error: result.error }, result.status);
           }
           if (pathname === "/api/native/orders") {
             const result = await listNativeOrders(request);
@@ -96,6 +104,10 @@ export const Route = createFileRoute("/api/native/$")({
             return result.ok
               ? apiJson(result)
               : apiJson({ ok: false, error: result.error }, result.status);
+          }
+          if (pathname === "/api/native/ops/catalog") {
+            const result = await updateOperationsNativeCatalog(request, body);
+            return result.ok ? apiJson(result) : apiJson({ ok: false, error: result.error }, result.status);
           }
           if (pathname === "/api/native/orders") {
             const result = await createNativeOrder(request, body);
