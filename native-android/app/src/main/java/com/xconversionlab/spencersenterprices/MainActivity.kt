@@ -814,30 +814,30 @@ private fun OrderScreen(
         Text("Products Available", color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 17.sp)
         Card(
             colors = CardDefaults.cardColors(containerColor = PaleBlue),
-            shape = RoundedCornerShape(21.dp),
+            shape = RoundedCornerShape(22.dp),
             elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
             modifier = Modifier.fillMaxWidth(),
             border = androidx.compose.foundation.BorderStroke(1.5.dp, Blue),
         ) {
             Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Column(Modifier.width(70.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Box(Modifier.size(48.dp).clip(RoundedCornerShape(14.dp)).background(Color.White), contentAlignment = Alignment.Center) {
+                    Column(Modifier.width(88.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                        Box(Modifier.size(76.dp).clip(RoundedCornerShape(18.dp)).background(Color.White), contentAlignment = Alignment.Center) {
                             Image(
                                 painter = painterResource(id = R.drawable.egg_icon),
                                 contentDescription = "Fresh egg",
-                                modifier = Modifier.size(38.dp),
+                                modifier = Modifier.size(62.dp),
                                 contentScale = ContentScale.Fit,
                             )
                         }
-                        Text("Fresh Egg", color = Navy, fontWeight = FontWeight.Bold, fontSize = 9.sp)
+                        Text("Fresh Egg", color = Navy, fontWeight = FontWeight.Bold, fontSize = 10.sp)
                     }
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text("Fresh Egg", color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 17.sp)
-                        Text("₹7 per egg", color = Blue, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Text("Fresh Egg", color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 19.sp)
+                        Text("₹7 per egg", color = Blue, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                     }
                     Column(horizontalAlignment = Alignment.End) {
-                        Text(money(eggTotal), color = Navy, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
+                        Text(money(eggTotal), color = Navy, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
                         Text("Main item", color = Muted, fontSize = 9.sp)
                     }
                 }
@@ -1659,6 +1659,53 @@ private fun EmptyState(emoji: String, title: String, body: String) {
             Text(emoji, fontSize = 29.sp)
             Text(title, color = Navy, fontSize = 15.sp, fontWeight = FontWeight.ExtraBold)
             Text(body, color = Muted, fontSize = 11.sp, lineHeight = 17.sp)
+        }
+    }
+}
+
+private fun addressTypeFor(label: String): String = when (label.trim().lowercase(Locale.US)) {
+    "home" -> "Home"
+    "work" -> "Work"
+    else -> "Other"
+}
+
+@Composable
+private fun AddressTypeSelector(selected: String, onSelected: (String) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        listOf("Home", "Work", "Other").forEach { type ->
+            val isSelected = selected == type
+            Surface(
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 48.dp)
+                    .selectable(
+                        selected = isSelected,
+                        role = Role.RadioButton,
+                        onClick = { onSelected(type) },
+                    ),
+                color = if (isSelected) Navy else Color.White,
+                shape = RoundedCornerShape(14.dp),
+                border = androidx.compose.foundation.BorderStroke(
+                    if (isSelected) 1.5.dp else 1.dp,
+                    if (isSelected) Navy else Line,
+                ),
+            ) {
+                Box(
+                    Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 12.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        type + if (isSelected) "  ✓" else "",
+                        color = if (isSelected) Color.White else Ink,
+                        fontSize = 13.sp,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                        maxLines = 1,
+                    )
+                }
+            }
         }
     }
 }
