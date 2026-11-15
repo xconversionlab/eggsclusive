@@ -26,6 +26,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -566,10 +570,35 @@ private fun SpencersApp() {
         containerColor = Paper,
         snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
-            NavigationBar(containerColor = Color.White, tonalElevation = 10.dp) {
-                NavigationBarItem(tab == MainTab.Order, { tab = MainTab.Order }, icon = { Icon(Icons.Filled.ShoppingBasket, null) }, label = { Text("Order") })
-                NavigationBarItem(tab == MainTab.Status, { tab = MainTab.Status }, icon = { Icon(Icons.Filled.History, null) }, label = { Text("Status", maxLines = 1) })
-                NavigationBarItem(tab == MainTab.Profile, { tab = MainTab.Profile }, icon = { Icon(Icons.Filled.Person, null) }, label = { Text("Profile") })
+            NavigationBar(containerColor = Color.White, tonalElevation = 8.dp) {
+                val itemColors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = Blue,
+                    selectedTextColor = Navy,
+                    indicatorColor = PaleBlue,
+                    unselectedIconColor = Muted,
+                    unselectedTextColor = Muted,
+                )
+                NavigationBarItem(
+                    selected = tab == MainTab.Order,
+                    onClick = { tab = MainTab.Order },
+                    icon = { Icon(Icons.Filled.ShoppingBasket, null) },
+                    label = { Text("Order") },
+                    colors = itemColors,
+                )
+                NavigationBarItem(
+                    selected = tab == MainTab.Status,
+                    onClick = { tab = MainTab.Status },
+                    icon = { Icon(Icons.Filled.History, null) },
+                    label = { Text("Status", maxLines = 1) },
+                    colors = itemColors,
+                )
+                NavigationBarItem(
+                    selected = tab == MainTab.Profile,
+                    onClick = { tab = MainTab.Profile },
+                    icon = { Icon(Icons.Filled.Person, null) },
+                    label = { Text("Profile") },
+                    colors = itemColors,
+                )
             }
         },
     ) { inner ->
@@ -759,8 +788,8 @@ private fun OrderScreen(
     var partnerContactPhone by rememberSaveable { mutableStateOf("") }
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding().padding(horizontal = 16.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Card(
             colors = CardDefaults.cardColors(containerColor = Navy),
@@ -785,30 +814,30 @@ private fun OrderScreen(
         Text("Products Available", color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 17.sp)
         Card(
             colors = CardDefaults.cardColors(containerColor = PaleBlue),
-            shape = RoundedCornerShape(21.dp),
+            shape = RoundedCornerShape(22.dp),
             elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
             modifier = Modifier.fillMaxWidth(),
             border = androidx.compose.foundation.BorderStroke(1.5.dp, Blue),
         ) {
             Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Column(Modifier.width(70.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Box(Modifier.size(48.dp).clip(RoundedCornerShape(14.dp)).background(Color.White), contentAlignment = Alignment.Center) {
+                    Column(Modifier.width(88.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                        Box(Modifier.size(76.dp).clip(RoundedCornerShape(18.dp)).background(Color.White), contentAlignment = Alignment.Center) {
                             Image(
                                 painter = painterResource(id = R.drawable.egg_icon),
                                 contentDescription = "Fresh egg",
-                                modifier = Modifier.size(38.dp),
+                                modifier = Modifier.size(62.dp),
                                 contentScale = ContentScale.Fit,
                             )
                         }
-                        Text("Fresh Egg", color = Navy, fontWeight = FontWeight.Bold, fontSize = 9.sp)
+                        Text("Fresh Egg", color = Navy, fontWeight = FontWeight.Bold, fontSize = 10.sp)
                     }
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text("Fresh Egg", color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 17.sp)
-                        Text("₹7 per egg", color = Blue, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Text("Fresh Egg", color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 19.sp)
+                        Text("₹7 per egg", color = Blue, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                     }
                     Column(horizontalAlignment = Alignment.End) {
-                        Text(money(eggTotal), color = Navy, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
+                        Text(money(eggTotal), color = Navy, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
                         Text("Main item", color = Muted, fontSize = 9.sp)
                     }
                 }
@@ -947,7 +976,7 @@ private fun OrderScreen(
                     Text("Complete your verified profile, city, pincode and address before checkout.", color = Muted, fontSize = 11.sp)
                     OutlinedButton(onClick = onOpenProfile, modifier = Modifier.fillMaxWidth()) { Text("Complete profile") }
                 }
-                OutlinedButton(onClick = onOpenMap, modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(onClick = onOpenMap, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(14.dp)) {
                     Icon(Icons.Filled.LocationOn, null, tint = Blue)
                     Text("Pin this address on map", modifier = Modifier.padding(start = 7.dp))
                 }
@@ -1034,8 +1063,8 @@ private fun ActivityScreen(
     walletEntries: List<WalletTransaction>,
 ) {
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(15.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding().padding(horizontal = 16.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         BrandHeader("YOUR ORDERS", "Status", "Track your order and see delivery updates.")
         Row(
@@ -1203,6 +1232,7 @@ private fun ProfileScreen(
     var complaint by rememberSaveable { mutableStateOf("") }
     var showAddAddress by rememberSaveable { mutableStateOf(false) }
     var newLabel by rememberSaveable { mutableStateOf(profile.addressLabel.ifBlank { "Home" }) }
+    var selectedAddressType by rememberSaveable { mutableStateOf(addressTypeFor(profile.addressLabel.ifBlank { "Home" })) }
     var newDoor by rememberSaveable { mutableStateOf(profile.door) }
     var newStreet by rememberSaveable { mutableStateOf(profile.street) }
     var newArea by rememberSaveable { mutableStateOf(profile.area) }
@@ -1211,8 +1241,8 @@ private fun ProfileScreen(
     var newPincode by rememberSaveable { mutableStateOf(profile.pincode) }
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(15.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding().padding(horizontal = 16.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         BrandHeader("PERSONAL DETAILS", "Your profile", "Contact details and up to four saved addresses.")
         Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(22.dp), modifier = Modifier.fillMaxWidth()) {
@@ -1233,8 +1263,8 @@ private fun ProfileScreen(
                     )
                     Text("To change this number, contact Spencer's support to re-verify your account.", color = Muted, fontSize = 10.sp)
                 }
-                Button(onClick = { onSave(profile) }, modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(13.dp), colors = ButtonDefaults.buttonColors(containerColor = Navy)) {
+                Button(onClick = { onSave(profile) }, modifier = Modifier.fillMaxWidth().height(52.dp),
+                    shape = RoundedCornerShape(14.dp), colors = ButtonDefaults.buttonColors(containerColor = Navy)) {
                     Text("Save profile details")
                 }
             }
@@ -1266,7 +1296,15 @@ private fun ProfileScreen(
         }
 
         if (profile.savedAddresses.size < 4) {
-            OutlinedButton(onClick = { showAddAddress = true }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(13.dp)) {
+            OutlinedButton(
+                onClick = {
+                    newLabel = profile.addressLabel.ifBlank { "Home" }
+                    selectedAddressType = addressTypeFor(newLabel)
+                    showAddAddress = true
+                },
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape = RoundedCornerShape(14.dp),
+            ) {
                 Icon(Icons.Filled.Add, null, tint = Blue)
                 Text("Add address", modifier = Modifier.padding(start = 7.dp))
             }
@@ -1312,40 +1350,104 @@ private fun ProfileScreen(
     }
 
     if (showAddAddress) {
-        AlertDialog(
+        Dialog(
             onDismissRequest = { showAddAddress = false },
-            title = { Text("Add a saved address") },
-            text = {
-                Column(Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    AppTextField("Address name (Home / Work / Mother's home)", newLabel, { newLabel = it })
-                    AppTextField("Door / flat number", newDoor, { newDoor = it })
-                    AppTextField("Street / road", newStreet, { newStreet = it })
-                    AppTextField("Area / locality", newArea, { newArea = it })
-                    AppTextField("Landmark", newLandmark, { newLandmark = it })
-                    AppTextField("City", newCity, { newCity = it })
-                    AppTextField("6-digit pincode", newPincode, { newPincode = it.filter(Char::isDigit).take(6) }, KeyboardType.Number)
-                    Text("Door, street, area, city and pincode are required. Map pin and landmark are optional.", color = Muted, fontSize = 10.sp)
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = newLabel.isNotBlank() && newDoor.isNotBlank() && newStreet.isNotBlank() &&
-                        newArea.isNotBlank() && newCity.isNotBlank() && newPincode.length == 6,
-                    onClick = {
-                        val address = SavedAddress(
-                            "addr-" + System.currentTimeMillis(), newLabel.trim(), newDoor.trim(), newStreet.trim(),
-                            newArea.trim(), newLandmark.trim(), newCity.trim(), newPincode,
-                            0.0, 0.0,
+            properties = DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .heightIn(max = 680.dp)
+                    .imePadding(),
+                shape = RoundedCornerShape(24.dp),
+                color = Paper,
+                tonalElevation = 8.dp,
+                shadowElevation = 12.dp,
+            ) {
+                Column(Modifier.fillMaxWidth()) {
+                    Column(
+                        Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 18.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text("Add a saved address", color = Navy, fontSize = 19.sp, fontWeight = FontWeight.ExtraBold)
+                        Text(
+                            "Enter the delivery details and choose how to label this address.",
+                            color = Muted,
+                            fontSize = 12.sp,
+                            lineHeight = 17.sp,
                         )
-                        onSave(profile.withAddress(address))
-                        showAddAddress = false
-                        newLabel = "Home"; newDoor = ""; newStreet = ""; newArea = ""; newLandmark = ""
-                        newCity = profile.city; newPincode = ""
-                    },
-                ) { Text("Save address") }
-            },
-            dismissButton = { TextButton(onClick = { showAddAddress = false }) { Text("Cancel") } },
-        )
+                    }
+                    Divider(color = Line)
+                    Column(
+                        Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Text("DELIVERY DETAILS", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.1.sp)
+                        AppTextField("Door / flat number", newDoor, { newDoor = it })
+                        AppTextField("Street / road", newStreet, { newStreet = it })
+                        AppTextField("Area / locality", newArea, { newArea = it })
+                        AppTextField("Landmark (optional)", newLandmark, { newLandmark = it })
+                        AppTextField("City", newCity, { newCity = it })
+                        AppTextField("6-digit pincode", newPincode, { newPincode = it.filter(Char::isDigit).take(6) }, KeyboardType.Number)
+                        Divider(color = Line)
+                        Text("ADDRESS TYPE", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.1.sp)
+                        AddressTypeSelector(
+                            selected = selectedAddressType,
+                            onSelected = { type ->
+                                if (type == "Other" && selectedAddressType != "Other") newLabel = ""
+                                if (type != "Other") newLabel = type
+                                selectedAddressType = type
+                            },
+                        )
+                        if (selectedAddressType == "Other") {
+                            AppTextField("Address name", newLabel, { newLabel = it })
+                            Text("Example: Mother's home", color = Muted, fontSize = 11.sp)
+                        }
+                        Text(
+                            "Door, street, area, city and pincode are required. Map pin and landmark are optional.",
+                            color = Muted,
+                            fontSize = 11.sp,
+                            lineHeight = 16.sp,
+                        )
+                    }
+                    Divider(color = Line)
+                    Row(
+                        Modifier.fillMaxWidth().background(Color.White).padding(horizontal = 16.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        OutlinedButton(
+                            onClick = { showAddAddress = false },
+                            modifier = Modifier.weight(1f).height(52.dp),
+                            shape = RoundedCornerShape(14.dp),
+                        ) { Text("Cancel", color = Navy) }
+                        Button(
+                            enabled = (selectedAddressType != "Other" || newLabel.isNotBlank()) &&
+                                newDoor.isNotBlank() && newStreet.isNotBlank() && newArea.isNotBlank() &&
+                                newCity.isNotBlank() && newPincode.length == 6,
+                            onClick = {
+                                val addressLabel = if (selectedAddressType == "Other") newLabel.trim() else selectedAddressType
+                                val address = SavedAddress(
+                                    "addr-" + System.currentTimeMillis(), addressLabel, newDoor.trim(), newStreet.trim(),
+                                    newArea.trim(), newLandmark.trim(), newCity.trim(), newPincode,
+                                    0.0, 0.0,
+                                )
+                                onSave(profile.withAddress(address))
+                                showAddAddress = false
+                                newLabel = "Home"
+                                selectedAddressType = "Home"
+                                newDoor = ""; newStreet = ""; newArea = ""; newLandmark = ""
+                                newCity = profile.city; newPincode = ""
+                            },
+                            modifier = Modifier.weight(1.25f).height(52.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Navy),
+                        ) { Text("Save address", fontWeight = FontWeight.Bold) }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -1364,7 +1466,7 @@ private fun LoginScreen(
     var successMessage by rememberSaveable { mutableStateOf("") }
     var error by rememberSaveable { mutableStateOf("") }
     Column(
-        Modifier.fillMaxSize().background(Paper).verticalScroll(rememberScrollState()).padding(24.dp),
+        Modifier.fillMaxSize().background(Paper).verticalScroll(rememberScrollState()).imePadding().padding(horizontal = 20.dp, vertical = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
@@ -1492,7 +1594,7 @@ private fun EggQuantityAction(
     val scope = rememberCoroutineScope()
     Surface(
         modifier = Modifier
-            .size(43.dp)
+            .size(48.dp)
             .graphicsLayer { scaleX = scale.value; scaleY = scale.value }
             .clickable(enabled = enabled) {
                 onClick()
@@ -1543,7 +1645,7 @@ private fun SelectableRow(title: String, subtitle: String, selected: Boolean, en
 
 @Composable
 private fun InnerTab(label: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Surface(modifier.clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick),
+    Surface(modifier.heightIn(min = 48.dp).clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp), color = if (selected) Navy else Color.Transparent) {
         Box(Modifier.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
             Text(label, color = if (selected) Color.White else Muted, fontWeight = FontWeight.Bold, fontSize = 12.sp)
@@ -1562,9 +1664,56 @@ private fun EmptyState(emoji: String, title: String, body: String) {
     }
 }
 
+private fun addressTypeFor(label: String): String = when (label.trim().lowercase(Locale.US)) {
+    "home" -> "Home"
+    "work" -> "Work"
+    else -> "Other"
+}
+
+@Composable
+private fun AddressTypeSelector(selected: String, onSelected: (String) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        listOf("Home", "Work", "Other").forEach { type ->
+            val isSelected = selected == type
+            Surface(
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 48.dp)
+                    .selectable(
+                        selected = isSelected,
+                        role = Role.RadioButton,
+                        onClick = { onSelected(type) },
+                    ),
+                color = if (isSelected) Navy else Color.White,
+                shape = RoundedCornerShape(14.dp),
+                border = androidx.compose.foundation.BorderStroke(
+                    if (isSelected) 1.5.dp else 1.dp,
+                    if (isSelected) Navy else Line,
+                ),
+            ) {
+                Box(
+                    Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 12.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        type + if (isSelected) "  ✓" else "",
+                        color = if (isSelected) Color.White else Ink,
+                        fontSize = 13.sp,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                        maxLines = 1,
+                    )
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun AppTextField(label: String, value: String, onValueChange: (String) -> Unit, keyboardType: KeyboardType = KeyboardType.Text) {
-    OutlinedTextField(value, onValueChange, label = { Text(label) }, modifier = Modifier.fillMaxWidth(),
+    OutlinedTextField(value, onValueChange, label = { Text(label) }, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
         singleLine = true, shape = RoundedCornerShape(13.dp), keyboardOptions = KeyboardOptions(keyboardType = keyboardType))
 }
 
