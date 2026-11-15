@@ -20,6 +20,11 @@ type NativeOrder = {
   paymentStatus?: string;
   productType?: string;
   bottleDepositPaise?: number;
+  waterCanQuantity?: number;
+  milkQuantity?: number;
+  curdQuantity?: number;
+  milkUnitPricePaise?: number;
+  curdUnitPricePaise?: number;
   status: string;
   partnerShop: string;
   partnerName: string;
@@ -37,6 +42,9 @@ const STATUS_OPTIONS = [
   { value: "delivered", label: "Delivered" },
   { value: "cancelled", label: "Cancelled" },
 ];
+
+type CatalogDraft = { price: string; packLabel: string; enabled: boolean };
+type CatalogKey = "milk" | "curd";
 
 const formatMoney = (paise: number) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(paise / 100);
@@ -57,6 +65,11 @@ function NativeOrdersOperations() {
   const [updatingId, setUpdatingId] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [catalogDraft, setCatalogDraft] = useState<Record<CatalogKey, CatalogDraft>>({
+    milk: { price: "", packLabel: "", enabled: false },
+    curd: { price: "", packLabel: "", enabled: false },
+  });
+  const [savingCatalog, setSavingCatalog] = useState(false);
 
   async function loadOrders() {
     if (!opsKey.trim()) return;
@@ -79,11 +92,67 @@ function NativeOrdersOperations() {
       const supportData = await supportResponse.json();
       if (!supportResponse.ok || !supportData.ok) throw new Error(supportData.error || "Orders loaded, but support tickets could not be loaded.");
       setComplaints(supportData.complaints || []);
-      setNotice("Orders refreshed.");
+      const catalogResponse = await fetch("/api/native/ops/catalog", {
+        headers: { "x-native-ops-key": opsKey.trim() },
+        cache: "no-store",
+      });
+      const catalogData = await catalogResponse.json();
+      if (!catalogResponse.ok || !catalogData.ok) throw new Error(catalogData.error || "Orders loaded, but product pricing could not be loaded.");
+      setCatalogDraft({
+        milk: {
+          price: catalogData.catalog?.milk?.unitPricePaise ? String(catalogData.catalog.milk.unitPricePaise / 100) : "",
+          packLabel: catalogData.catalog?.milk?.packLabel || "",
+          enabled: Boolean(catalogData.catalog?.milk?.enabled),
+        },
+        curd: {
+          price: catalogData.catalog?.curd?.unitPricePaise ? String(catalogData.catalog.curd.unitPricePaise / 100) : "",
+          packLabel: catalogData.catalog?.curd?.packLabel || "",
+          enabled: Boolean(catalogData.catalog?.curd?.enabled),
+        },
+      });
+      setNotice("Orders and product pricing refreshed.");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not load orders.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function saveCatalog() {
+    setSavingCatalog(true);
+    setError("");
+    setNotice("");
+    try {
+      const payload = Object.fromEntries((["milk", "curd"] as const).map((key) => {
+        const item = catalogDraft[key];
+        const price = Number(item.price);
+        if (!Number.isFinite(price) || price < 0 || price > 1000000) {
+          throw new Error(`Enter a valid ${key} price in rupees.`);
+        }
+        if (item.enabled && (price <= 0 || !item.packLabel.trim())) {
+          throw new Error(`Enter the ${key} price and pack size before making it available.`);
+        }
+        return [key, {
+          unitPricePaise: Math.round(price * 100),
+          packLabel: item.packLabel.trim(),
+          enabled: item.enabled,
+        }];
+      }));
+      const response = await fetch("/api/native/ops/catalog", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-native-ops-key": opsKey.trim(),
+        },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data.error || "Could not save product pricing.");
+      setNotice("Milk and curd prices saved. Customer apps will refresh the catalogue automatically.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save product pricing.");
+    } finally {
+      setSavingCatalog(false);
     }
   }
 
@@ -169,6 +238,72 @@ function NativeOrdersOperations() {
           {notice ? <p role="status" className="mt-3 rounded-lg bg-sky-50 p-3 text-sm text-sky-800">{notice}</p> : null}
         </section>
 
+        <section className="rounded-2xl border border-[#dce5f0] bg-white p-5 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-extrabold">Product pricing</h2>
+              <p className="mt-1 text-sm text-[#6b7a90]">Set the pack size and live selling price for Milk and Curd. Checkout totals are calculated from these saved prices.</p>
+            </div>
+            <button
+              type="button"
+              onClick={saveCatalog}
+              disabled={!opsKey.trim() || savingCatalog}
+              className="min-h-11 rounded-xl bg-[#07172e] px-5 font-bold text-white disabled:opacity-50"
+            >
+              {savingCatalog ? "Saving prices…" : "Save product prices"}
+            </button>
+          </div>
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            {(["milk", "curd"] as const).map((key) => (
+              <div key={key} className="rounded-xl border border-[#dce5f0] bg-[#f8fafc] p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="text-lg font-extrabold capitalize">{key}</h3>
+                  <label className="flex items-center gap-2 text-sm font-semibold">
+                    <input
+                      type="checkbox"
+                      checked={catalogDraft[key].enabled}
+                      onChange={(event) => setCatalogDraft((previous) => ({
+                        ...previous,
+                        [key]: { ...previous[key], enabled: event.target.checked },
+                      }))}
+                    />
+                    Available in app
+                  </label>
+                </div>
+                <label className="mt-3 block text-xs font-bold text-[#6b7a90]" htmlFor={key + "-pack"}>Pack size / unit</label>
+                <input
+                  id={key + "-pack"}
+                  value={catalogDraft[key].packLabel}
+                  onChange={(event) => setCatalogDraft((previous) => ({
+                    ...previous,
+                    [key]: { ...previous[key], packLabel: event.target.value },
+                  }))}
+                  placeholder={key === "milk" ? "e.g. 500 ml pouch" : "e.g. 400 g cup"}
+                  maxLength={60}
+                  className="mt-1 min-h-11 w-full rounded-xl border border-[#dce5f0] bg-white px-3"
+                />
+                <label className="mt-3 block text-xs font-bold text-[#6b7a90]" htmlFor={key + "-price"}>Selling price (₹)</label>
+                <input
+                  id={key + "-price"}
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={catalogDraft[key].price}
+                  onChange={(event) => setCatalogDraft((previous) => ({
+                    ...previous,
+                    [key]: { ...previous[key], price: event.target.value },
+                  }))}
+                  placeholder="Enter price"
+                  className="mt-1 min-h-11 w-full rounded-xl border border-[#dce5f0] bg-white px-3"
+                />
+                <p className="mt-2 text-xs text-[#6b7a90]">
+                  {catalogDraft[key].enabled ? "Customers can order this product." : "Hidden from checkout until you enable it."}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+
         <section className="flex items-center justify-between gap-3">
           <div>
             <h2 className="text-xl font-extrabold">Orders</h2>
@@ -229,7 +364,12 @@ function NativeOrdersOperations() {
             <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
               <div>
                 <p className="text-xs font-bold uppercase tracking-wide text-[#6b7a90]">Order</p>
-                <p className="mt-1">{order.productType === "water_can" ? "Water Can" : "Fresh Egg"} × {order.quantity} · {formatMoney(order.totalPaise)}</p>
+                <p className="mt-1">{[
+                  ...(order.quantity > 0 ? [`Fresh Egg × ${order.quantity}`] : []),
+                  ...(order.waterCanQuantity ? [`Water Can × ${order.waterCanQuantity}`] : []),
+                  ...(order.milkQuantity ? [`Milk × ${order.milkQuantity}`] : []),
+                  ...(order.curdQuantity ? [`Curd × ${order.curdQuantity}`] : []),
+                ].join(" · ") || "No item details"} · {formatMoney(order.totalPaise)}</p>
                 {order.bottleDepositPaise ? <p className="text-[#6b7a90]">Bottle deposit: {formatMoney(order.bottleDepositPaise)}</p> : null}
                 <p className="text-[#6b7a90]">{order.payment} · {order.paymentStatus || "pending"}</p>
               </div>
