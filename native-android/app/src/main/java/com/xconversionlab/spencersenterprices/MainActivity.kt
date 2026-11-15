@@ -976,7 +976,7 @@ private fun OrderScreen(
                     Text("Complete your verified profile, city, pincode and address before checkout.", color = Muted, fontSize = 11.sp)
                     OutlinedButton(onClick = onOpenProfile, modifier = Modifier.fillMaxWidth()) { Text("Complete profile") }
                 }
-                OutlinedButton(onClick = onOpenMap, modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(onClick = onOpenMap, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(14.dp)) {
                     Icon(Icons.Filled.LocationOn, null, tint = Blue)
                     Text("Pin this address on map", modifier = Modifier.padding(start = 7.dp))
                 }
@@ -1263,8 +1263,8 @@ private fun ProfileScreen(
                     )
                     Text("To change this number, contact Spencer's support to re-verify your account.", color = Muted, fontSize = 10.sp)
                 }
-                Button(onClick = { onSave(profile) }, modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(13.dp), colors = ButtonDefaults.buttonColors(containerColor = Navy)) {
+                Button(onClick = { onSave(profile) }, modifier = Modifier.fillMaxWidth().height(52.dp),
+                    shape = RoundedCornerShape(14.dp), colors = ButtonDefaults.buttonColors(containerColor = Navy)) {
                     Text("Save profile details")
                 }
             }
@@ -1383,6 +1383,14 @@ private fun ProfileScreen(
                         Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
+                        Text("DELIVERY DETAILS", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.1.sp)
+                        AppTextField("Door / flat number", newDoor, { newDoor = it })
+                        AppTextField("Street / road", newStreet, { newStreet = it })
+                        AppTextField("Area / locality", newArea, { newArea = it })
+                        AppTextField("Landmark (optional)", newLandmark, { newLandmark = it })
+                        AppTextField("City", newCity, { newCity = it })
+                        AppTextField("6-digit pincode", newPincode, { newPincode = it.filter(Char::isDigit).take(6) }, KeyboardType.Number)
+                        Divider(color = Line)
                         Text("ADDRESS TYPE", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.1.sp)
                         AddressTypeSelector(
                             selected = selectedAddressType,
@@ -1396,14 +1404,6 @@ private fun ProfileScreen(
                             AppTextField("Address name", newLabel, { newLabel = it })
                             Text("Example: Mother's home", color = Muted, fontSize = 11.sp)
                         }
-                        Divider(color = Line)
-                        Text("DELIVERY DETAILS", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.1.sp)
-                        AppTextField("Door / flat number", newDoor, { newDoor = it })
-                        AppTextField("Street / road", newStreet, { newStreet = it })
-                        AppTextField("Area / locality", newArea, { newArea = it })
-                        AppTextField("Landmark (optional)", newLandmark, { newLandmark = it })
-                        AppTextField("City", newCity, { newCity = it })
-                        AppTextField("6-digit pincode", newPincode, { newPincode = it.filter(Char::isDigit).take(6) }, KeyboardType.Number)
                         Text(
                             "Door, street, area, city and pincode are required. Map pin and landmark are optional.",
                             color = Muted,
