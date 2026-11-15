@@ -1241,8 +1241,8 @@ private fun ProfileScreen(
     var newPincode by rememberSaveable { mutableStateOf(profile.pincode) }
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(15.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding().padding(horizontal = 16.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         BrandHeader("PERSONAL DETAILS", "Your profile", "Contact details and up to four saved addresses.")
         Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(22.dp), modifier = Modifier.fillMaxWidth()) {
@@ -1298,6 +1298,7 @@ private fun ProfileScreen(
         if (profile.savedAddresses.size < 4) {
             OutlinedButton(
                 onClick = {
+                    newLabel = profile.addressLabel.ifBlank { "Home" }
                     selectedAddressType = addressTypeFor(newLabel)
                     showAddAddress = true
                 },
@@ -1465,7 +1466,7 @@ private fun LoginScreen(
     var successMessage by rememberSaveable { mutableStateOf("") }
     var error by rememberSaveable { mutableStateOf("") }
     Column(
-        Modifier.fillMaxSize().background(Paper).verticalScroll(rememberScrollState()).padding(24.dp),
+        Modifier.fillMaxSize().background(Paper).verticalScroll(rememberScrollState()).imePadding().padding(horizontal = 20.dp, vertical = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
