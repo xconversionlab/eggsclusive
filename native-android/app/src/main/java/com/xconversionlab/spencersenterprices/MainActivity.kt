@@ -26,6 +26,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -566,10 +570,35 @@ private fun SpencersApp() {
         containerColor = Paper,
         snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
-            NavigationBar(containerColor = Color.White, tonalElevation = 10.dp) {
-                NavigationBarItem(tab == MainTab.Order, { tab = MainTab.Order }, icon = { Icon(Icons.Filled.ShoppingBasket, null) }, label = { Text("Order") })
-                NavigationBarItem(tab == MainTab.Status, { tab = MainTab.Status }, icon = { Icon(Icons.Filled.History, null) }, label = { Text("Status", maxLines = 1) })
-                NavigationBarItem(tab == MainTab.Profile, { tab = MainTab.Profile }, icon = { Icon(Icons.Filled.Person, null) }, label = { Text("Profile") })
+            NavigationBar(containerColor = Color.White, tonalElevation = 8.dp) {
+                val itemColors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = Blue,
+                    selectedTextColor = Navy,
+                    indicatorColor = PaleBlue,
+                    unselectedIconColor = Muted,
+                    unselectedTextColor = Muted,
+                )
+                NavigationBarItem(
+                    selected = tab == MainTab.Order,
+                    onClick = { tab = MainTab.Order },
+                    icon = { Icon(Icons.Filled.ShoppingBasket, null) },
+                    label = { Text("Order") },
+                    colors = itemColors,
+                )
+                NavigationBarItem(
+                    selected = tab == MainTab.Status,
+                    onClick = { tab = MainTab.Status },
+                    icon = { Icon(Icons.Filled.History, null) },
+                    label = { Text("Status", maxLines = 1) },
+                    colors = itemColors,
+                )
+                NavigationBarItem(
+                    selected = tab == MainTab.Profile,
+                    onClick = { tab = MainTab.Profile },
+                    icon = { Icon(Icons.Filled.Person, null) },
+                    label = { Text("Profile") },
+                    colors = itemColors,
+                )
             }
         },
     ) { inner ->
@@ -759,8 +788,8 @@ private fun OrderScreen(
     var partnerContactPhone by rememberSaveable { mutableStateOf("") }
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding().padding(horizontal = 16.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Card(
             colors = CardDefaults.cardColors(containerColor = Navy),
@@ -1034,8 +1063,8 @@ private fun ActivityScreen(
     walletEntries: List<WalletTransaction>,
 ) {
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(15.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding().padding(horizontal = 16.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         BrandHeader("YOUR ORDERS", "Status", "Track your order and see delivery updates.")
         Row(
@@ -1203,6 +1232,7 @@ private fun ProfileScreen(
     var complaint by rememberSaveable { mutableStateOf("") }
     var showAddAddress by rememberSaveable { mutableStateOf(false) }
     var newLabel by rememberSaveable { mutableStateOf(profile.addressLabel.ifBlank { "Home" }) }
+    var selectedAddressType by rememberSaveable { mutableStateOf(addressTypeFor(profile.addressLabel.ifBlank { "Home" })) }
     var newDoor by rememberSaveable { mutableStateOf(profile.door) }
     var newStreet by rememberSaveable { mutableStateOf(profile.street) }
     var newArea by rememberSaveable { mutableStateOf(profile.area) }
@@ -1266,7 +1296,14 @@ private fun ProfileScreen(
         }
 
         if (profile.savedAddresses.size < 4) {
-            OutlinedButton(onClick = { showAddAddress = true }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(13.dp)) {
+            OutlinedButton(
+                onClick = {
+                    selectedAddressType = addressTypeFor(newLabel)
+                    showAddAddress = true
+                },
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape = RoundedCornerShape(14.dp),
+            ) {
                 Icon(Icons.Filled.Add, null, tint = Blue)
                 Text("Add address", modifier = Modifier.padding(start = 7.dp))
             }
@@ -1492,7 +1529,7 @@ private fun EggQuantityAction(
     val scope = rememberCoroutineScope()
     Surface(
         modifier = Modifier
-            .size(43.dp)
+            .size(48.dp)
             .graphicsLayer { scaleX = scale.value; scaleY = scale.value }
             .clickable(enabled = enabled) {
                 onClick()
@@ -1543,7 +1580,7 @@ private fun SelectableRow(title: String, subtitle: String, selected: Boolean, en
 
 @Composable
 private fun InnerTab(label: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Surface(modifier.clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick),
+    Surface(modifier.heightIn(min = 48.dp).clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp), color = if (selected) Navy else Color.Transparent) {
         Box(Modifier.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
             Text(label, color = if (selected) Color.White else Muted, fontWeight = FontWeight.Bold, fontSize = 12.sp)
@@ -1564,7 +1601,7 @@ private fun EmptyState(emoji: String, title: String, body: String) {
 
 @Composable
 private fun AppTextField(label: String, value: String, onValueChange: (String) -> Unit, keyboardType: KeyboardType = KeyboardType.Text) {
-    OutlinedTextField(value, onValueChange, label = { Text(label) }, modifier = Modifier.fillMaxWidth(),
+    OutlinedTextField(value, onValueChange, label = { Text(label) }, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
         singleLine = true, shape = RoundedCornerShape(13.dp), keyboardOptions = KeyboardOptions(keyboardType = keyboardType))
 }
 
