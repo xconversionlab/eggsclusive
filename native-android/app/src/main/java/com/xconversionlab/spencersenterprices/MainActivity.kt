@@ -1349,40 +1349,104 @@ private fun ProfileScreen(
     }
 
     if (showAddAddress) {
-        AlertDialog(
+        Dialog(
             onDismissRequest = { showAddAddress = false },
-            title = { Text("Add a saved address") },
-            text = {
-                Column(Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    AppTextField("Address name (Home / Work / Mother's home)", newLabel, { newLabel = it })
-                    AppTextField("Door / flat number", newDoor, { newDoor = it })
-                    AppTextField("Street / road", newStreet, { newStreet = it })
-                    AppTextField("Area / locality", newArea, { newArea = it })
-                    AppTextField("Landmark", newLandmark, { newLandmark = it })
-                    AppTextField("City", newCity, { newCity = it })
-                    AppTextField("6-digit pincode", newPincode, { newPincode = it.filter(Char::isDigit).take(6) }, KeyboardType.Number)
-                    Text("Door, street, area, city and pincode are required. Map pin and landmark are optional.", color = Muted, fontSize = 10.sp)
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = newLabel.isNotBlank() && newDoor.isNotBlank() && newStreet.isNotBlank() &&
-                        newArea.isNotBlank() && newCity.isNotBlank() && newPincode.length == 6,
-                    onClick = {
-                        val address = SavedAddress(
-                            "addr-" + System.currentTimeMillis(), newLabel.trim(), newDoor.trim(), newStreet.trim(),
-                            newArea.trim(), newLandmark.trim(), newCity.trim(), newPincode,
-                            0.0, 0.0,
+            properties = DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .heightIn(max = 680.dp)
+                    .imePadding(),
+                shape = RoundedCornerShape(24.dp),
+                color = Paper,
+                tonalElevation = 8.dp,
+                shadowElevation = 12.dp,
+            ) {
+                Column(Modifier.fillMaxWidth()) {
+                    Column(
+                        Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 18.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text("Add a saved address", color = Navy, fontSize = 19.sp, fontWeight = FontWeight.ExtraBold)
+                        Text(
+                            "Enter the delivery details and choose how to label this address.",
+                            color = Muted,
+                            fontSize = 12.sp,
+                            lineHeight = 17.sp,
                         )
-                        onSave(profile.withAddress(address))
-                        showAddAddress = false
-                        newLabel = "Home"; newDoor = ""; newStreet = ""; newArea = ""; newLandmark = ""
-                        newCity = profile.city; newPincode = ""
-                    },
-                ) { Text("Save address") }
-            },
-            dismissButton = { TextButton(onClick = { showAddAddress = false }) { Text("Cancel") } },
-        )
+                    }
+                    Divider(color = Line)
+                    Column(
+                        Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Text("ADDRESS TYPE", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.1.sp)
+                        AddressTypeSelector(
+                            selected = selectedAddressType,
+                            onSelected = { type ->
+                                if (type == "Other" && selectedAddressType != "Other") newLabel = ""
+                                if (type != "Other") newLabel = type
+                                selectedAddressType = type
+                            },
+                        )
+                        if (selectedAddressType == "Other") {
+                            AppTextField("Address name", newLabel, { newLabel = it })
+                            Text("Example: Mother's home", color = Muted, fontSize = 11.sp)
+                        }
+                        Divider(color = Line)
+                        Text("DELIVERY DETAILS", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.1.sp)
+                        AppTextField("Door / flat number", newDoor, { newDoor = it })
+                        AppTextField("Street / road", newStreet, { newStreet = it })
+                        AppTextField("Area / locality", newArea, { newArea = it })
+                        AppTextField("Landmark (optional)", newLandmark, { newLandmark = it })
+                        AppTextField("City", newCity, { newCity = it })
+                        AppTextField("6-digit pincode", newPincode, { newPincode = it.filter(Char::isDigit).take(6) }, KeyboardType.Number)
+                        Text(
+                            "Door, street, area, city and pincode are required. Map pin and landmark are optional.",
+                            color = Muted,
+                            fontSize = 11.sp,
+                            lineHeight = 16.sp,
+                        )
+                    }
+                    Divider(color = Line)
+                    Row(
+                        Modifier.fillMaxWidth().background(Color.White).padding(horizontal = 16.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        OutlinedButton(
+                            onClick = { showAddAddress = false },
+                            modifier = Modifier.weight(1f).height(52.dp),
+                            shape = RoundedCornerShape(14.dp),
+                        ) { Text("Cancel", color = Navy) }
+                        Button(
+                            enabled = (selectedAddressType != "Other" || newLabel.isNotBlank()) &&
+                                newDoor.isNotBlank() && newStreet.isNotBlank() && newArea.isNotBlank() &&
+                                newCity.isNotBlank() && newPincode.length == 6,
+                            onClick = {
+                                val addressLabel = if (selectedAddressType == "Other") newLabel.trim() else selectedAddressType
+                                val address = SavedAddress(
+                                    "addr-" + System.currentTimeMillis(), addressLabel, newDoor.trim(), newStreet.trim(),
+                                    newArea.trim(), newLandmark.trim(), newCity.trim(), newPincode,
+                                    0.0, 0.0,
+                                )
+                                onSave(profile.withAddress(address))
+                                showAddAddress = false
+                                newLabel = "Home"
+                                selectedAddressType = "Home"
+                                newDoor = ""; newStreet = ""; newArea = ""; newLandmark = ""
+                                newCity = profile.city; newPincode = ""
+                            },
+                            modifier = Modifier.weight(1.25f).height(52.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Navy),
+                        ) { Text("Save address", fontWeight = FontWeight.Bold) }
+                    }
+                }
+            }
+        }
     }
 }
 
