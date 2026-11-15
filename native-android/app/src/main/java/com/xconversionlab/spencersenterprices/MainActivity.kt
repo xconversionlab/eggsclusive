@@ -10,9 +10,15 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -778,6 +784,77 @@ private fun OrderScreen(
 
         Text("Products Available", color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 17.sp)
         Card(
+            colors = CardDefaults.cardColors(containerColor = PaleBlue),
+            shape = RoundedCornerShape(21.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+            modifier = Modifier.fillMaxWidth(),
+            border = androidx.compose.foundation.BorderStroke(1.5.dp, Blue),
+        ) {
+            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(Modifier.width(70.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Box(Modifier.size(48.dp).clip(RoundedCornerShape(14.dp)).background(Color.White), contentAlignment = Alignment.Center) {
+                            Image(
+                                painter = painterResource(id = R.drawable.egg_icon),
+                                contentDescription = "Fresh egg",
+                                modifier = Modifier.size(38.dp),
+                                contentScale = ContentScale.Fit,
+                            )
+                        }
+                        Text("Fresh Egg", color = Navy, fontWeight = FontWeight.Bold, fontSize = 9.sp)
+                    }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text("Fresh Egg", color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 17.sp)
+                        Text("₹7 per egg", color = Blue, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(money(eggTotal), color = Navy, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
+                        Text("Main item", color = Muted, fontSize = 9.sp)
+                    }
+                }
+                Divider(color = Line)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text("Quantity", color = Navy, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(13.dp),
+                    ) {
+                        EggQuantityAction(
+                            icon = Icons.Filled.Remove,
+                            description = "Decrease egg quantity",
+                            enabled = eggQuantity > 0,
+                            isIncrease = false,
+                        ) { onEggQuantityChange(eggQuantity - 1) }
+                        AnimatedContent(
+                            targetState = eggQuantity,
+                            transitionSpec = {
+                                if (targetState > initialState) {
+                                    (slideInVertically { height -> height } + fadeIn()) togetherWith
+                                        (slideOutVertically { height -> -height } + fadeOut())
+                                } else {
+                                    (slideInVertically { height -> -height } + fadeIn()) togetherWith
+                                        (slideOutVertically { height -> height } + fadeOut())
+                                }
+                            },
+                            label = "egg-quantity-direction",
+                        ) { quantity ->
+                            Text("$quantity eggs", color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 13.sp)
+                        }
+                        EggQuantityAction(
+                            icon = Icons.Filled.Add,
+                            description = "Increase egg quantity",
+                            enabled = eggQuantity < 360,
+                            isIncrease = true,
+                        ) { onEggQuantityChange(eggQuantity + 1) }
+                    }
+                }
+            }
+        }
+
+        Card(
             colors = CardDefaults.cardColors(containerColor = if (waterCanIncluded) PaleBlue else Color.White),
             shape = RoundedCornerShape(21.dp),
             elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
@@ -836,56 +913,7 @@ private fun OrderScreen(
         ConfiguredProductCard("Milk", "🥛", milkCatalog.packLabel, milkCatalog.unitPricePaise, milkCatalog.enabled, milkQuantity, onMilkQuantityChange)
         ConfiguredProductCard("Curd", "🥣", curdCatalog.packLabel, curdCatalog.unitPricePaise, curdCatalog.enabled, curdQuantity, onCurdQuantityChange)
 
-        Card(
-            colors = CardDefaults.cardColors(containerColor = PaleBlue),
-            shape = RoundedCornerShape(21.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-            modifier = Modifier.fillMaxWidth(),
-            border = androidx.compose.foundation.BorderStroke(1.5.dp, Blue),
-        ) {
-            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Column(Modifier.width(70.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Box(Modifier.size(48.dp).clip(RoundedCornerShape(14.dp)).background(Color.White), contentAlignment = Alignment.Center) {
-                            Image(
-                                painter = painterResource(id = R.drawable.egg_icon),
-                                contentDescription = "Fresh egg",
-                                modifier = Modifier.size(38.dp),
-                                contentScale = ContentScale.Fit,
-                            )
-                        }
-                        Text("Fresh Egg", color = Navy, fontWeight = FontWeight.Bold, fontSize = 9.sp)
-                    }
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text("Fresh Egg", color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 17.sp)
-                        Text("₹7 per egg", color = Blue, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                    }
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text(money(eggTotal), color = Navy, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
-                        Text("Main item", color = Muted, fontSize = 9.sp)
-                    }
-                }
-                Divider(color = Line)
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Text("Quantity", color = Navy, fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(13.dp),
-                    ) {
-                        RoundAction(Icons.Filled.Remove, "Decrease egg quantity", eggQuantity > 0) {
-                            onEggQuantityChange(eggQuantity - 1)
-                        }
-                        Text("$eggQuantity eggs", color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 13.sp)
-                        RoundAction(Icons.Filled.Add, "Increase egg quantity", eggQuantity < 360) {
-                            onEggQuantityChange(eggQuantity + 1)
-                        }
-                    }
-                }
-            }
-        }
+
 
         Card(
             colors = CardDefaults.cardColors(containerColor = Color.White),
@@ -1449,6 +1477,43 @@ private fun SectionHeading(title: String, subtitle: String) {
     Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
         Text(title, color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 17.sp)
         Text(subtitle, color = Muted, fontSize = 11.sp)
+    }
+}
+
+@Composable
+private fun EggQuantityAction(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    description: String,
+    enabled: Boolean,
+    isIncrease: Boolean,
+    onClick: () -> Unit,
+) {
+    val scale = remember { Animatable(1f) }
+    val scope = rememberCoroutineScope()
+    Surface(
+        modifier = Modifier
+            .size(43.dp)
+            .graphicsLayer { scaleX = scale.value; scaleY = scale.value }
+            .clickable(enabled = enabled) {
+                onClick()
+                scope.launch {
+                    scale.snapTo(1f)
+                    scale.animateTo(
+                        targetValue = if (isIncrease) 1.13f else 0.87f,
+                        animationSpec = tween(durationMillis = 95, easing = FastOutSlowInEasing),
+                    )
+                    scale.animateTo(
+                        targetValue = 1f,
+                        animationSpec = spring(dampingRatio = 0.55f, stiffness = 520f),
+                    )
+                }
+            },
+        color = if (enabled) Navy else Line,
+        shape = CircleShape,
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(icon, description, tint = if (enabled) Color.White else Muted)
+        }
     }
 }
 
