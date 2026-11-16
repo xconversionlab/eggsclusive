@@ -160,7 +160,7 @@ function Shell({ children }: { children: ReactNode }) {
   return (
     <div className={cn("mx-auto w-full px-4 pt-4", admin ? "max-w-6xl" : "max-w-3xl", customer && onboarded ? "pb-28 md:pb-10" : "pb-10")}>
       {vendor ? <VendorNav t={t} /> : null}
-      {admin ? <AdminNav t={t} /> : null}
+      {admin && path !== "/admin/native-orders" ? <AdminNav t={t} /> : null}
       {customer && onboarded ? (
         <nav className="mb-4 hidden gap-1 md:flex" aria-label={t(bi("Customer", "வாடிக்கையாளர்"))}>
           <CustomerLinks t={t} />
