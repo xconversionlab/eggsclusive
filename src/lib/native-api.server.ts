@@ -493,9 +493,11 @@ export async function listOperationsNativeOrders(request: Request) {
   }
   const sql = await getSql();
   const rows = await sql.query<Row>(
-    `select id, customer_name, customer_phone, quantity, water_can_quantity, milk_quantity, curd_quantity,
+    `select id, customer_name, customer_phone, quantity, unit_price_paise,
+            water_can_quantity, milk_quantity, curd_quantity,
             milk_unit_price_paise, curd_unit_price_paise, bottle_deposit_paise,
-            total_paise, payment_method, status,
+            empty_bottles_to_return, floor_delivery_charge_paise,
+            total_paise, payment_method, payment_status, status,
             partner_shop, partner_name, partner_phone, address_label, address_line, city, pincode,
             created_at, status_changed_at
        from native_orders
@@ -509,14 +511,19 @@ export async function listOperationsNativeOrders(request: Request) {
       phone: row.customer_phone,
       quantity: Number(row.quantity),
       eggQuantity: Number(row.quantity),
+      eggUnitPricePaise: Number(row.unit_price_paise ?? 700),
       waterCanQuantity: Number(row.water_can_quantity ?? 0),
+      waterCanUnitPricePaise: 3000,
       milkQuantity: Number(row.milk_quantity ?? 0),
       curdQuantity: Number(row.curd_quantity ?? 0),
       milkUnitPricePaise: Number(row.milk_unit_price_paise ?? 0),
       curdUnitPricePaise: Number(row.curd_unit_price_paise ?? 0),
       bottleDepositPaise: Number(row.bottle_deposit_paise ?? 0),
+      emptyBottlesToReturn: row.empty_bottles_to_return !== false,
+      floorDeliveryChargePaise: Number(row.floor_delivery_charge_paise ?? 0),
       totalPaise: Number(row.total_paise),
       payment: row.payment_method,
+      paymentStatus: row.payment_status,
       status: row.status,
       partnerShop: row.partner_shop,
       partnerName: row.partner_name,
