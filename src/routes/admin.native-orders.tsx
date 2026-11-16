@@ -1,18 +1,13 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
-  Activity,
-  ArrowDownRight,
-  ArrowUpRight,
   BadgeCheck,
-  Bell,
   Boxes,
   Check,
   ChevronDown,
   ChevronRight,
   CircleAlert,
   Clock3,
-  Droplets,
   Egg,
   LayoutDashboard,
   LockKeyhole,
@@ -1205,7 +1200,6 @@ function OrderCard({
   const currentStage = stageIndex(order.status);
   const isTerminal = order.status === "delivered" || order.status === "cancelled";
   const nextStep = currentStage >= 0 && currentStage < ORDER_FLOW.length - 1 ? ORDER_FLOW[currentStage + 1] : null;
-  const phone = order.phone.replace(/\D/g, "");
   const allowedOptions = [
     ...(nextStep ? [{ value: nextStep.value, label: nextStep.label }] : []),
     ...(!isTerminal ? [{ value: "cancelled", label: "Cancel order" }] : []),
