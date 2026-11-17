@@ -98,7 +98,7 @@ export function BrowseBody() {
         <Field value={q} onChange={(e) => setQ(e.target.value)} placeholder={t(bi("Search varieties", "வகைகளைத் தேடுங்கள்"))} />
         <div className="flex gap-2 overflow-x-auto">
           <Chip active={pack === null} onClick={() => setPack(null)}>{t(bi("Any pack", "எந்தப் பொதியும்"))}</Chip>
-          {[6, 12, 30, 210].map((n) => (
+          {[10, 12, 30, 210].map((n) => (
             <Chip key={n} active={pack === n} onClick={() => setPack(n)}>{packLabel(n, shop.lang)}</Chip>
           ))}
           <Chip active={savedOnly} onClick={() => setSavedOnly((v) => !v)}>{t(bi("Saved", "சேமிப்பு"))}</Chip>
@@ -121,7 +121,7 @@ export function ProductBody({ sku }: { sku: string }) {
   const add = useEggs((s) => s.addToCart);
   const createSub = useEggs((s) => s.createSub);
   const profile = useEggs((s) => s.profile);
-  const [pack, setPack] = useState(product?.packs[0] ?? 6);
+  const [pack, setPack] = useState(product?.packs.find((n) => n >= 10) ?? 10);
   const [cadence, setCadence] = useState<"daily" | "weekly">("daily");
   if (!product) {
     return (
@@ -132,7 +132,7 @@ export function ProductBody({ sku }: { sku: string }) {
   }
   const row = priceOf(shop.vendorProducts, shop.vendorId, product.id);
   const business = profile.accountType !== "home";
-  const packs = product.packs.filter((n) => business || n !== 210);
+  const packs = product.packs.filter((n) => n >= 10 && (business || n !== 210));
   return (
     <Gate>
       <div className="flex flex-col gap-4">
@@ -155,7 +155,7 @@ export function ProductBody({ sku }: { sku: string }) {
             <Chip key={n} active={pack === n} onClick={() => setPack(n)}>{packLabel(n, shop.lang)}</Chip>
           ))}
         </div>
-        <Button data-testid="add-pack" disabled={!row || row.stockEggs < pack} onClick={() => add(product.id, pack)}>
+        <Button data-testid="add-pack" disabled={!row || pack < 10 || row.stockEggs < pack} onClick={() => add(product.id, pack)}>
           {t(bi("Add pack", "பொதியைச் சேர்"))}
         </Button>
         <Panel className="flex flex-col gap-3">
@@ -165,7 +165,7 @@ export function ProductBody({ sku }: { sku: string }) {
             <Chip active={cadence === "weekly"} onClick={() => setCadence("weekly")}>{t(bi("Weekly", "வாரம்"))}</Chip>
           </div>
           <p className="text-sm text-muted">{t(bi("Dawn slot, same shop. It will not jump to a backup if this shop is short.", "அதிகாலை, அதே கடை. இருப்பு குறைந்தால் மாற்றுக் கடைக்குத் தானாகப் போகாது."))}</p>
-          <Button variant="line" disabled={!row} onClick={() => createSub({ productId: product.id, pack, qtyPacks: 1, cadence, slotId: "dawn" })}>
+          <Button variant="line" disabled={!row || pack < 10} onClick={() => createSub({ productId: product.id, pack, qtyPacks: 1, cadence, slotId: "dawn" })}>
             {t(bi("Start subscription", "சந்தா தொடங்கு"))}
           </Button>
         </Panel>
