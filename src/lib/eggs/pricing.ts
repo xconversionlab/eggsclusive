@@ -64,7 +64,7 @@ export function quoteCart(input: {
   };
 }
 
-export const PACKS = [1, 6, 12, 15, 30, 210] as const;
+export const PACKS = [10, 12, 15, 30, 210] as const;
 
 export function packLabel(pack: number, lang: "en" | "ta") {
   if (pack === 210) return lang === "ta" ? "மொத்த தட்டு · 210" : "Bulk tray · 210";
