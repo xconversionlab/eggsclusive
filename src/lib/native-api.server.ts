@@ -104,7 +104,7 @@ const ORDER_STATUS_LABEL: Record<string, string> = {
   cancelled: "cancelled",
 };
 
-async function dispatchOrderStatusSms(
+export async function dispatchOrderStatusSms(
   sql: Awaited<ReturnType<typeof getSql>>,
   orderId: string,
   phone: string,
