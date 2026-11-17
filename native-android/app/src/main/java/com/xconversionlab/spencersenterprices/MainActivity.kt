@@ -2357,6 +2357,8 @@ private fun saveWallet(prefs: SharedPreferences, entries: List<WalletTransaction
 
 private class NativeApiException(message: String, val httpStatus: Int) : IllegalStateException(message)
 
+private class NativeApiException(message: String, val httpStatus: Int) : IllegalStateException(message)
+
 private fun nativeApiRequest(
     path: String,
     method: String,
