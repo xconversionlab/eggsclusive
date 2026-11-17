@@ -300,7 +300,7 @@ export async function createNativeOrder(request: Request, body: unknown) {
      values ($1,$2,$3,$4,$5,$6,$7,'cash_on_delivery','placed',$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,
        'egg',$18,$19,$20,$21,$22,$23,$24,$25,$26,'pending',$27)`,
     [orderId, customer.id, customer.phone, customer.name, eggQuantity, eggUnitPricePaise, totalPaise,
-      assignedVendor?.id ?? "", assignedVendor?.name ?? "", assignedVendor?.phone ?? "", encryptOtp(deliveryOtp), address.label, address.line, address.city, address.pincode,
+      assignedVendor?.name ?? "", assignedVendor?.name ?? "", assignedVendor?.phone ?? "", encryptOtp(deliveryOtp), address.label, address.line, address.city, address.pincode,
       address.latitude, address.longitude, waterCanQuantity, milkQuantity, curdQuantity,
       milkUnitPricePaise, curdUnitPricePaise, bottleDepositPaise, emptyBottlesToReturn,
       floorCount, floorDeliveryChargePaise, assignedVendor?.id ?? null],
@@ -495,11 +495,9 @@ export async function listOperationsNativeOrders(request: Request) {
   }
   const sql = await getSql();
   const rows = await sql.query<Row>(
-    `select id, customer_name, customer_phone, quantity, unit_price_paise,
-            water_can_quantity, milk_quantity, curd_quantity,
+    `select id, customer_name, customer_phone, quantity, water_can_quantity, milk_quantity, curd_quantity,
             milk_unit_price_paise, curd_unit_price_paise, bottle_deposit_paise,
-            empty_bottles_to_return, floor_delivery_charge_paise,
-            total_paise, payment_method, payment_status, status,
+            total_paise, payment_method, status,
             partner_shop, partner_name, partner_phone, address_label, address_line, city, pincode,
             created_at, status_changed_at
        from native_orders
@@ -513,19 +511,14 @@ export async function listOperationsNativeOrders(request: Request) {
       phone: row.customer_phone,
       quantity: Number(row.quantity),
       eggQuantity: Number(row.quantity),
-      eggUnitPricePaise: Number(row.unit_price_paise ?? 700),
       waterCanQuantity: Number(row.water_can_quantity ?? 0),
-      waterCanUnitPricePaise: 3000,
       milkQuantity: Number(row.milk_quantity ?? 0),
       curdQuantity: Number(row.curd_quantity ?? 0),
       milkUnitPricePaise: Number(row.milk_unit_price_paise ?? 0),
       curdUnitPricePaise: Number(row.curd_unit_price_paise ?? 0),
       bottleDepositPaise: Number(row.bottle_deposit_paise ?? 0),
-      emptyBottlesToReturn: row.empty_bottles_to_return !== false,
-      floorDeliveryChargePaise: Number(row.floor_delivery_charge_paise ?? 0),
       totalPaise: Number(row.total_paise),
       payment: row.payment_method,
-      paymentStatus: row.payment_status,
       status: row.status,
       partnerShop: row.partner_shop,
       partnerName: row.partner_name,
