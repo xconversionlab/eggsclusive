@@ -168,8 +168,10 @@ fun MapPickerScreen(
     onConfirm: (Double, Double) -> Unit,
 ) {
     val context = LocalContext.current
-    val hasSavedPin = initialLatitude != 0.0 || initialLongitude != 0.0
-    var center by remember {
+    val hasSavedPin = initialLatitude.isFinite() && initialLongitude.isFinite() &&
+        initialLatitude in -90.0..90.0 && initialLongitude in -180.0..180.0 &&
+        (initialLatitude != 0.0 || initialLongitude != 0.0)
+    var center by remember(initialLatitude, initialLongitude) {
         mutableStateOf(
             if (hasSavedPin) MapPoint(initialLatitude, initialLongitude)
             else MapPoint(20.5937, 78.9629),
@@ -189,6 +191,9 @@ fun MapPickerScreen(
         locating = false
         if (location == null) {
             message = "Could not get your location. Drag the map pin to select it manually."
+        } else if (!location.latitude.isFinite() || !location.longitude.isFinite() ||
+            location.latitude !in -90.0..90.0 || location.longitude !in -180.0..180.0) {
+            message = "The device returned an invalid location. Move the pin manually and try again."
         } else {
             center = MapPoint(location.latitude, location.longitude)
             locationChosen = true
@@ -322,8 +327,17 @@ fun MapPickerScreen(
         }
         Spacer(Modifier.height(8.dp))
         Button(
-            onClick = { onConfirm(center.lat, center.lng) },
-            enabled = locationChosen,
+            onClick = {
+                if (center.lat.isFinite() && center.lng.isFinite() &&
+                    center.lat in -90.0..90.0 && center.lng in -180.0..180.0) {
+                    onConfirm(center.lat, center.lng)
+                } else {
+                    message = "The selected pin is invalid. Move it and try again."
+                    locationChosen = false
+                }
+            },
+            enabled = locationChosen && center.lat.isFinite() && center.lng.isFinite() &&
+                center.lat in -90.0..90.0 && center.lng in -180.0..180.0,
             modifier = Modifier.fillMaxWidth().height(53.dp),
             shape = RoundedCornerShape(15.dp),
             colors = ButtonDefaults.buttonColors(containerColor = Navy),

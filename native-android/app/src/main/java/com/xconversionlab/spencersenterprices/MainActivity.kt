@@ -108,6 +108,17 @@ private data class SavedAddress(
     val displayAddress: String get() = listOf(door, street, area, city, pincode).filter { it.isNotBlank() }.joinToString(", ")
 }
 
+private data class AddressEditorForm(
+    val label: String = "Home",
+    val selectedAddressType: String = "Home",
+    val door: String = "",
+    val street: String = "",
+    val area: String = "",
+    val landmark: String = "",
+    val city: String = "",
+    val pincode: String = "",
+)
+
 private data class CatalogProduct(
     val unitPricePaise: Int = 0,
     val packLabel: String = "",
@@ -336,8 +347,16 @@ private fun SpencersApp() {
                     .put("landmark", profile.landmark)
                     .put("city", profile.city)
                     .put("pincode", profile.pincode)
-                    .put("latitude", safeLatitude(profile.latitude))
-                    .put("longitude", safeLongitude(profile.longitude))
+
+                // A map pin is optional. Include it only when both coordinates are finite and valid;
+                // stale NaN values must not make the checkout JSONObject impossible to serialize.
+                val latitude = profile.latitude.takeIf { it.isFinite() && it in -90.0..90.0 }
+                val longitude = profile.longitude.takeIf { it.isFinite() && it in -180.0..180.0 }
+                if (latitude != null && longitude != null) {
+                    addressJson.put("latitude", latitude)
+                    addressJson.put("longitude", longitude)
+                }
+
                 val requestBody = JSONObject()
                     .put("eggQuantity", eggQuantity)
                     .put("waterCanQuantity", if (waterCanIncluded) waterQuantity else 0)
@@ -1279,38 +1298,29 @@ private fun ProfileScreen(
 ) {
     var complaint by rememberSaveable { mutableStateOf("") }
     var showAddAddress by rememberSaveable { mutableStateOf(false) }
-    var editingAddressId by rememberSaveable { mutableStateOf("") }
-    var newLabel by rememberSaveable { mutableStateOf("Home") }
-    var selectedAddressType by rememberSaveable { mutableStateOf("Home") }
-    var newDoor by rememberSaveable { mutableStateOf("") }
-    var newStreet by rememberSaveable { mutableStateOf("") }
-    var newArea by rememberSaveable { mutableStateOf("") }
-    var newLandmark by rememberSaveable { mutableStateOf("") }
-    var newCity by rememberSaveable { mutableStateOf("") }
-    var newPincode by rememberSaveable { mutableStateOf("") }
+    var editingAddressId by remember { mutableStateOf("") }
+    var addressForm by remember { mutableStateOf(AddressEditorForm()) }
+    var addressEditorError by remember { mutableStateOf("") }
 
     fun resetAddressForm() {
         editingAddressId = ""
-        newLabel = "Home"
-        selectedAddressType = "Home"
-        newDoor = ""
-        newStreet = ""
-        newArea = ""
-        newLandmark = ""
-        newCity = ""
-        newPincode = ""
+        addressForm = AddressEditorForm()
+        addressEditorError = ""
     }
 
     fun startEditingAddress(address: SavedAddress) {
         editingAddressId = address.id
-        newLabel = address.label
-        selectedAddressType = addressTypeFor(address.label)
-        newDoor = address.door
-        newStreet = address.street
-        newArea = address.area
-        newLandmark = address.landmark
-        newCity = address.city
-        newPincode = address.pincode
+        addressForm = AddressEditorForm(
+            label = address.label,
+            selectedAddressType = addressTypeFor(address.label),
+            door = address.door,
+            street = address.street,
+            area = address.area,
+            landmark = address.landmark,
+            city = address.city,
+            pincode = address.pincode,
+        )
+        addressEditorError = ""
         showAddAddress = true
     }
 
@@ -1437,7 +1447,11 @@ private fun ProfileScreen(
                 showAddAddress = false
                 resetAddressForm()
             },
-            properties = DialogProperties(usePlatformDefaultWidth = false),
+            properties = DialogProperties(
+                dismissOnBackPress = true,
+                dismissOnClickOutside = false,
+                usePlatformDefaultWidth = false,
+            ),
         ) {
             Surface(
                 modifier = Modifier
@@ -1478,24 +1492,27 @@ private fun ProfileScreen(
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         Text("DELIVERY DETAILS", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.1.sp)
-                        AppTextField("Door / flat number", newDoor, { newDoor = it })
-                        AppTextField("Street / road", newStreet, { newStreet = it })
-                        AppTextField("Area / locality", newArea, { newArea = it })
-                        AppTextField("Landmark (optional)", newLandmark, { newLandmark = it })
-                        AppTextField("City", newCity, { newCity = it })
-                        AppTextField("6-digit pincode", newPincode, { newPincode = it.filter(Char::isDigit).take(6) }, KeyboardType.Number)
+                        AppTextField("Door / flat number", addressForm.door, { addressForm = addressForm.copy(door = it) })
+                        AppTextField("Street / road", addressForm.street, { addressForm = addressForm.copy(street = it) })
+                        AppTextField("Area / locality", addressForm.area, { addressForm = addressForm.copy(area = it) })
+                        AppTextField("Landmark (optional)", addressForm.landmark, { addressForm = addressForm.copy(landmark = it) })
+                        AppTextField("City", addressForm.city, { addressForm = addressForm.copy(city = it) })
+                        AppTextField("6-digit pincode", addressForm.pincode, { addressForm = addressForm.copy(pincode = it.filter(Char::isDigit).take(6)) }, KeyboardType.Number)
                         Divider(color = Line)
                         Text("ADDRESS TYPE", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.1.sp)
                         AddressTypeSelector(
-                            selected = selectedAddressType,
+                            selected = addressForm.selectedAddressType,
                             onSelected = { type ->
-                                if (type == "Other" && selectedAddressType != "Other") newLabel = ""
-                                if (type != "Other") newLabel = type
-                                selectedAddressType = type
+                                val label = when {
+                                    type == "Other" && addressForm.selectedAddressType != "Other" -> ""
+                                    type != "Other" -> type
+                                    else -> addressForm.label
+                                }
+                                addressForm = addressForm.copy(label = label, selectedAddressType = type)
                             },
                         )
-                        if (selectedAddressType == "Other") {
-                            AppTextField("Address name", newLabel, { newLabel = it })
+                        if (addressForm.selectedAddressType == "Other") {
+                            AppTextField("Address name", addressForm.label, { addressForm = addressForm.copy(label = it) })
                             Text("Example: Mother's home", color = Muted, fontSize = 11.sp)
                         }
                         Text(
@@ -1504,6 +1521,9 @@ private fun ProfileScreen(
                             fontSize = 11.sp,
                             lineHeight = 16.sp,
                         )
+                        if (addressEditorError.isNotBlank()) {
+                            Text(addressEditorError, color = Color(0xFFB91C1C), fontSize = 11.sp)
+                        }
                     }
                     Divider(color = Line)
                     Row(
@@ -1520,27 +1540,31 @@ private fun ProfileScreen(
                             shape = RoundedCornerShape(14.dp),
                         ) { Text("Cancel", color = Navy) }
                         Button(
-                            enabled = (selectedAddressType != "Other" || newLabel.isNotBlank()) &&
-                                newDoor.isNotBlank() && newStreet.isNotBlank() && newArea.isNotBlank() &&
-                                newCity.isNotBlank() && newPincode.length == 6,
+                            enabled = (addressForm.selectedAddressType != "Other" || addressForm.label.isNotBlank()) &&
+                                addressForm.door.isNotBlank() && addressForm.street.isNotBlank() && addressForm.area.isNotBlank() &&
+                                addressForm.city.isNotBlank() && addressForm.pincode.length == 6,
                             onClick = {
-                                val addressLabel = if (selectedAddressType == "Other") newLabel.trim() else selectedAddressType
+                                val addressLabel = if (addressForm.selectedAddressType == "Other") addressForm.label.trim() else addressForm.selectedAddressType
                                 val existing = profile.savedAddresses.firstOrNull { it.id == editingAddressId }
                                 val address = SavedAddress(
                                     editingAddressId.ifBlank { "addr-" + System.currentTimeMillis() },
                                     addressLabel,
-                                    newDoor.trim(),
-                                    newStreet.trim(),
-                                    newArea.trim(),
-                                    newLandmark.trim(),
-                                    newCity.trim(),
-                                    newPincode,
+                                    addressForm.door.trim(),
+                                    addressForm.street.trim(),
+                                    addressForm.area.trim(),
+                                    addressForm.landmark.trim(),
+                                    addressForm.city.trim(),
+                                    addressForm.pincode,
                                     safeLatitude(existing?.latitude ?: 0.0),
                                     safeLongitude(existing?.longitude ?: 0.0),
                                 )
-                                onSave(profile.withAddress(address))
-                                showAddAddress = false
-                                resetAddressForm()
+                                try {
+                                    onSave(profile.withAddress(address))
+                                    showAddAddress = false
+                                    resetAddressForm()
+                                } catch (error: Exception) {
+                                    addressEditorError = error.message ?: "Could not save this address. Please try again."
+                                }
                             },
                             modifier = Modifier.weight(1.25f).height(52.dp),
                             shape = RoundedCornerShape(14.dp),
