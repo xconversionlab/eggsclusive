@@ -897,7 +897,7 @@ private fun AdminScreen(
         AlertDialog(
             onDismissRequest = { cancelOrder = null },
             title = { Text("Cancel this order?") },
-            text = { Text("This will mark ${{cancelOrder!!.id} as cancelled. Any refund follows the server's payment-status rule.") },
+            text = { Text("This will mark ${cancelOrder!!.id} as cancelled. Any refund follows the server's payment-status rule.") },
             confirmButton = {
                 TextButton(onClick = {
                     cancelOrder?.let { onUpdateOrder(it.id, "cancelled") }
@@ -955,10 +955,10 @@ private fun AdminScreen(
                     Text(order.customerName.ifBlank { "Customer" } + " · " + order.phone, color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                     Text(
                         listOfNotNull(
-                            if (order.eggQuantity > 0) "Egg × ${{order.eggQuantity}" else null,
-                            if (order.waterCanQuantity > 0) "Water × ${{order.waterCanQuantity}" else null,
-                            if (order.milkQuantity > 0) "Milk × ${{order.milkQuantity}" else null,
-                            if (order.curdQuantity > 0) "Curd × ${{order.curdQuantity}" else null,
+                            if (order.eggQuantity > 0) "Egg × ${order.eggQuantity}" else null,
+                            if (order.waterCanQuantity > 0) "Water × ${order.waterCanQuantity}" else null,
+                            if (order.milkQuantity > 0) "Milk × ${order.milkQuantity}" else null,
+                            if (order.curdQuantity > 0) "Curd × ${order.curdQuantity}" else null,
                         ).joinToString("  ·  "),
                         color = Muted, fontSize = 12.sp,
                     )
@@ -966,7 +966,7 @@ private fun AdminScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(money(order.totalPaise), color = Navy, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
-                            Text("Payment: ${{order.paymentStatus} · ${{order.payment}", color = Muted, fontSize = 10.sp)
+                            Text("Payment: ${order.paymentStatus} · ${order.payment}", color = Muted, fontSize = 10.sp)
                         }
                         if (order.status !in listOf("cancelled", "delivered") && nextStatus.isNotBlank()) {
                             Button(onClick = { onUpdateOrder(order.id, nextStatus) }, colors = ButtonDefaults.buttonColors(containerColor = Blue)) {
@@ -982,7 +982,7 @@ private fun AdminScreen(
                     if (order.status !in listOf("cancelled", "delivered")) {
                         TextButton(onClick = { cancelOrder = order }) { Text("Cancel order", color = Color(0xFFB42318), fontSize = 11.sp) }
                     }
-                    if (order.partnerName.isNotBlank()) Text("Partner: ${{order.partnerName} · ${{order.partnerPhone}", color = Muted, fontSize = 11.sp)
+                    if (order.partnerName.isNotBlank()) Text("Partner: ${order.partnerName} · ${order.partnerPhone}", color = Muted, fontSize = 11.sp)
                     Text(formatDate(order.createdAt), color = Muted, fontSize = 10.sp)
                 }
             }
