@@ -1,6 +1,7 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
 import { getSql, dbSource } from "./db";
 import { requestCustomerOtp, verifyCustomerOtp } from "./customer-otp.server";
+import { assignOrderAutomatically } from "./vendor-assignment.server";
 
 type Row = Record<string, unknown>;
 function env(name: string): string | undefined {
@@ -103,7 +104,7 @@ const ORDER_STATUS_LABEL: Record<string, string> = {
   cancelled: "cancelled",
 };
 
-async function dispatchOrderStatusSms(
+export async function dispatchOrderStatusSms(
   sql: Awaited<ReturnType<typeof getSql>>,
   orderId: string,
   phone: string,
@@ -263,6 +264,7 @@ export async function createNativeOrder(request: Request, body: unknown) {
   }
 
   const sql = await getSql();
+  const assignedVendor = await assignOrderAutomatically(sql, address.pincode);
   const catalog = await readNativeCatalog(sql);
   if (milkQuantity > 0 && !catalog.milk.enabled) {
     return { ok: false as const, status: 409, error: "Milk is not available yet. Please refresh the product list." };
@@ -294,14 +296,14 @@ export async function createNativeOrder(request: Request, body: unknown) {
        payment_method, status, partner_shop, partner_name, partner_phone, delivery_otp_encrypted,
        address_label, address_line, city, pincode, latitude, longitude, product_type,
        water_can_quantity, milk_quantity, curd_quantity, milk_unit_price_paise, curd_unit_price_paise,
-       bottle_deposit_paise, empty_bottles_to_return, floor_count, floor_delivery_charge_paise, payment_status)
+       bottle_deposit_paise, empty_bottles_to_return, floor_count, floor_delivery_charge_paise, payment_status, vendor_id)
      values ($1,$2,$3,$4,$5,$6,$7,'cash_on_delivery','placed',$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,
-       'egg',$18,$19,$20,$21,$22,$23,$24,$25,$26,'pending')`,
+       'egg',$18,$19,$20,$21,$22,$23,$24,$25,$26,'pending',$27)`,
     [orderId, customer.id, customer.phone, customer.name, eggQuantity, eggUnitPricePaise, totalPaise,
-      "", "", "", encryptOtp(deliveryOtp), address.label, address.line, address.city, address.pincode,
+      assignedVendor?.name ?? "", assignedVendor?.name ?? "", assignedVendor?.phone ?? "", encryptOtp(deliveryOtp), address.label, address.line, address.city, address.pincode,
       address.latitude, address.longitude, waterCanQuantity, milkQuantity, curdQuantity,
       milkUnitPricePaise, curdUnitPricePaise, bottleDepositPaise, emptyBottlesToReturn,
-      floorCount, floorDeliveryChargePaise],
+      floorCount, floorDeliveryChargePaise, assignedVendor?.id ?? null],
   );
   await sql.query(
     "insert into native_order_events (id, order_id, from_status, to_status, note, actor) values ($1,$2,null,'placed','Order placed by customer','customer')",
@@ -331,8 +333,8 @@ export async function createNativeOrder(request: Request, body: unknown) {
       status: "placed",
       payment: "Cash on delivery",
       paymentStatus: "pending",
-      partnerName: "",
-      partnerPhone: "",
+      partnerName: assignedVendor?.name ?? "",
+      partnerPhone: assignedVendor?.phone ?? "",
       deliveryOtp,
       addressLabel: address.label,
       deliveryAddress: [address.line, address.city, address.pincode].join(", "),
@@ -493,11 +495,9 @@ export async function listOperationsNativeOrders(request: Request) {
   }
   const sql = await getSql();
   const rows = await sql.query<Row>(
-    `select id, customer_name, customer_phone, quantity, unit_price_paise,
-            water_can_quantity, milk_quantity, curd_quantity,
+    `select id, customer_name, customer_phone, quantity, water_can_quantity, milk_quantity, curd_quantity,
             milk_unit_price_paise, curd_unit_price_paise, bottle_deposit_paise,
-            empty_bottles_to_return, floor_delivery_charge_paise,
-            total_paise, payment_method, payment_status, status,
+            total_paise, payment_method, status,
             partner_shop, partner_name, partner_phone, address_label, address_line, city, pincode,
             created_at, status_changed_at
        from native_orders
@@ -511,19 +511,14 @@ export async function listOperationsNativeOrders(request: Request) {
       phone: row.customer_phone,
       quantity: Number(row.quantity),
       eggQuantity: Number(row.quantity),
-      eggUnitPricePaise: Number(row.unit_price_paise ?? 700),
       waterCanQuantity: Number(row.water_can_quantity ?? 0),
-      waterCanUnitPricePaise: 3000,
       milkQuantity: Number(row.milk_quantity ?? 0),
       curdQuantity: Number(row.curd_quantity ?? 0),
       milkUnitPricePaise: Number(row.milk_unit_price_paise ?? 0),
       curdUnitPricePaise: Number(row.curd_unit_price_paise ?? 0),
       bottleDepositPaise: Number(row.bottle_deposit_paise ?? 0),
-      emptyBottlesToReturn: row.empty_bottles_to_return !== false,
-      floorDeliveryChargePaise: Number(row.floor_delivery_charge_paise ?? 0),
       totalPaise: Number(row.total_paise),
       payment: row.payment_method,
-      paymentStatus: row.payment_status,
       status: row.status,
       partnerShop: row.partner_shop,
       partnerName: row.partner_name,
