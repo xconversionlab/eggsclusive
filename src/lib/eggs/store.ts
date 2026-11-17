@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { addDays, readChennai } from "./clock";
 import { bi, nid } from "./labels";
-import { quoteCart } from "./pricing";
+import { eggsIn, quoteCart } from "./pricing";
 import { rankVendors, reassignBlock } from "./routing";
 import { createCatalogue, DEFAULT_PRICE, type Catalogue } from "./seed";
 import type {
@@ -198,6 +198,10 @@ export const useEggs = create<EggsState>()(
       setCartVendor: (id) => set({ cartVendorId: id, cart: [], couponCode: null, flash: say(bi("Cart moved to the other shop on your street.", "கூடை இந்தத் தெருவின் மற்ற கடைக்கு மாற்றப்பட்டது.")) }),
       addToCart: (productId, pack) => {
         const s = get();
+        if (!Number.isInteger(pack) || pack < 10) {
+          set({ flash: say(bi("The minimum egg pack is 10 eggs.", "குறைந்தபட்ச முட்டைப் பொதி 10 முட்டைகள்.")) });
+          return;
+        }
         if (!s.address) return;
         const decision = rankVendors({
           streetId: s.address.streetId,
@@ -235,6 +239,10 @@ export const useEggs = create<EggsState>()(
       },
       setLineQty: (productId, pack, qtyPacks) => {
         const s = get();
+        if (qtyPacks > 0 && (!Number.isInteger(pack) || pack < 10)) {
+          set({ flash: say(bi("The minimum egg pack is 10 eggs.", "குறைந்தபட்ச முட்டைப் பொதி 10 முட்டைகள்.")) });
+          return;
+        }
         if (qtyPacks <= 0) {
           set({ cart: s.cart.filter((l) => !(l.productId === productId && l.pack === pack)) });
           return;
@@ -262,6 +270,10 @@ export const useEggs = create<EggsState>()(
         const s = get();
         if (!s.address || !s.cartVendorId || s.cart.length === 0) return null;
         const demand = s.cart.map((l) => ({ productId: l.productId, eggs: l.pack * l.qtyPacks }));
+        if (eggsIn(s.cart) < 10) {
+          set({ flash: say(bi("The minimum order is 10 eggs.", "குறைந்தபட்ச ஆர்டர் 10 முட்டைகள்.")) });
+          return null;
+        }
         const decision = rankVendors({
           streetId: s.address.streetId,
           streets: s.streets,
@@ -573,6 +585,10 @@ export const useEggs = create<EggsState>()(
       topUp: (paise) => set({ walletPaise: get().walletPaise + paise, flash: say(bi("Wallet topped up.", "பணப்பை நிரப்பப்பட்டது.")) }),
       createSub: ({ productId, pack, qtyPacks, cadence, slotId }) => {
         const s = get();
+        if (!Number.isInteger(pack) || !Number.isInteger(qtyPacks) || pack * qtyPacks < 10) {
+          set({ flash: say(bi("Subscriptions require at least 10 eggs per delivery.", "ஒவ்வொரு சந்தா விநியோகத்திலும் குறைந்தது 10 முட்டைகள் தேவை.")) });
+          return;
+        }
         if (!s.address || !s.cartVendorId) return;
         const row = s.vendorProducts.find((p) => p.vendorId === s.cartVendorId && p.productId === productId && p.active);
         if (!row) return;
