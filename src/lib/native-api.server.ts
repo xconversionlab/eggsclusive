@@ -254,11 +254,13 @@ export async function createNativeOrder(request: Request, body: unknown) {
   const emptyBottlesToReturn = value.emptyBottlesToReturn !== false;
   const floorCount = Number.isInteger(value.floorCount) ? Number(value.floorCount) : 0;
 
-  if (!Number.isInteger(eggQuantity) || eggQuantity < 0 || eggQuantity > 360 ||
-      !Number.isInteger(waterCanQuantity) || waterCanQuantity < 0 || waterCanQuantity > 30 ||
+  if (!Number.isInteger(eggQuantity) || eggQuantity < 10 || eggQuantity > 360) {
+    return { ok: false as const, status: 400, error: "Fresh Egg orders require a minimum quantity of 10 eggs." };
+  }
+
+  if (!Number.isInteger(waterCanQuantity) || waterCanQuantity < 0 || waterCanQuantity > 30 ||
       !Number.isInteger(milkQuantity) || milkQuantity < 0 || milkQuantity > 60 ||
       !Number.isInteger(curdQuantity) || curdQuantity < 0 || curdQuantity > 60 ||
-      eggQuantity + waterCanQuantity + milkQuantity + curdQuantity === 0 ||
       !address || floorCount < 0 || floorCount > 100) {
     return { ok: false as const, status: 400, error: "Choose at least one product and complete the delivery address." };
   }

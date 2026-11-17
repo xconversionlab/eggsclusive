@@ -231,6 +231,7 @@ private fun SpencersApp() {
     var placingOrder by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
+        eggQuantity = eggQuantity.coerceIn(10, 360)
         delay(950)
         showSplash = false
     }
@@ -320,6 +321,11 @@ private fun SpencersApp() {
     }
     fun placeOrder() {
         if (placingOrder) return
+        if (eggQuantity < 10) {
+            eggQuantity = 10
+            scope.launch { snackbar.showSnackbar("Minimum order quantity is 10 eggs.") }
+            return
+        }
         if (!profile.isReady || sessionToken.isBlank()) {
             tab = MainTab.Profile
             scope.launch { snackbar.showSnackbar("Complete your verified mobile profile and delivery address first.") }
@@ -688,7 +694,7 @@ private fun SpencersApp() {
                         noEmptyBottles = false
                     },
                     eggQuantity = eggQuantity,
-                    onEggQuantityChange = { eggQuantity = it.coerceIn(0, 360) },
+                    onEggQuantityChange = { eggQuantity = it.coerceIn(10, 360) },
                     waterQuantity = waterQuantity,
                     onWaterQuantityChange = { waterQuantity = it.coerceIn(1, 30) },
                     milkQuantity = milkQuantity,
@@ -902,6 +908,7 @@ private fun OrderScreen(
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         Text("Fresh Egg", color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 19.sp)
                         Text("₹7 per egg", color = Blue, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        Text("Minimum order: 10 eggs", color = Muted, fontSize = 10.sp)
                     }
                     Column(horizontalAlignment = Alignment.End) {
                         Text(money(eggTotal), color = Navy, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
@@ -921,7 +928,7 @@ private fun OrderScreen(
                         EggQuantityAction(
                             icon = Icons.Filled.Remove,
                             description = "Decrease egg quantity",
-                            enabled = eggQuantity > 0,
+                            enabled = eggQuantity > 10,
                             isIncrease = false,
                         ) { onEggQuantityChange(eggQuantity - 1) }
                         AnimatedContent(
@@ -968,7 +975,7 @@ private fun OrderScreen(
                         Text("20L Water Can", color = Navy, fontWeight = FontWeight.Bold, fontSize = 9.sp)
                     }
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text("Water Can · Optional", color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 17.sp)
+                        Text("Water Can", color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 17.sp)
                         Text("₹30 per can", color = Blue, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
                     Column(horizontalAlignment = Alignment.End) {
@@ -977,7 +984,6 @@ private fun OrderScreen(
                             Text("Added · Tap to remove", color = Muted, fontSize = 9.sp)
                         } else {
                             Text("Add +", color = Blue, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold)
-                            Text("Optional", color = Muted, fontSize = 9.sp)
                         }
                     }
                 }
@@ -1056,7 +1062,7 @@ private fun OrderScreen(
                 if (waterCanIncluded) ProductSummaryRow("Water Can × $waterQuantity", waterTotal)
                 if (milkQuantity > 0) ProductSummaryRow("Milk · ${milkCatalog.packLabel} × $milkQuantity", milkTotal)
                 if (curdQuantity > 0) ProductSummaryRow("Curd · ${curdCatalog.packLabel} × $curdQuantity", curdTotal)
-                if (eggQuantity > 0) ProductSummaryRow("Fresh Egg × $eggQuantity", eggTotal)
+                ProductSummaryRow("Fresh Egg × $eggQuantity", eggTotal)
                 if (waterCanIncluded && bottleDeposit > 0) ProductSummaryRow("Bottle deposit", bottleDeposit)
                 if (waterCanIncluded) ProductSummaryRow("Floor delivery charge", floorCharge)
                 Row(verticalAlignment = Alignment.CenterVertically) {
