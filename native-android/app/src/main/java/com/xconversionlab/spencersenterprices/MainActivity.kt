@@ -2379,7 +2379,7 @@ private fun nativeApiRequest(
             setRequestProperty("Authorization", "Bearer $bearerToken")
         }
         if (!operationsKey.isNullOrBlank()) {
-            setRequestProperty("X-Native-Ops-Key", operationsKey)
+            setRequestProperty("x-native-ops-key", operationsKey)
         }
     }
     try {
