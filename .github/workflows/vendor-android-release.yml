@@ -83,19 +83,20 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: gradle --no-daemon --stacktrace assembleRelease
 
-      - name: Verify APK identity, signature and checksum
+      - name: Verify APK identity, version, signature and checksum
         run: |
           set -euo pipefail
           APK="vendor-android/app/build/outputs/apk/release/app-release.apk"
           test -s "$APK"
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "package: name='com.xconversionlab.spencersvendor'"
+          BADGING="$("$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK")"
+          printf '%s\n' "$BADGING" | grep -F "package: name='com.xconversionlab.spencersvendor' versionCode='2' versionName='1.0.1'"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK"
           sha256sum "$APK" > "$APK.sha256"
 
       - name: Upload standalone Vendor APK
         uses: actions/upload-artifact@v4
         with:
-          name: Spencers-Vendor-Android-Release-1.0.0
+          name: Spencers-Vendor-Android-Release-1.0.1
           path: |
             vendor-android/app/build/outputs/apk/release/app-release.apk
             vendor-android/app/build/outputs/apk/release/app-release.apk.sha256
