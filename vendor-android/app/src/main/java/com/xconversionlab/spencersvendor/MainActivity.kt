@@ -367,7 +367,6 @@ private fun VendorApp() {
 @Composable
 private fun VendorLogin(onSignedIn: (String) -> Unit) {
     val scope = rememberCoroutineScope()
-    var name by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
     var otp by remember { mutableStateOf("") }
     var requested by remember { mutableStateOf(false) }
@@ -391,7 +390,6 @@ private fun VendorLogin(onSignedIn: (String) -> Unit) {
             border = androidx.compose.foundation.BorderStroke(1.dp, Line)) {
             Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
                 Text("Vendor sign in", color = Navy, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                OutlinedTextField(name, { name = it }, Modifier.fillMaxWidth(), label = { Text("Contact name") }, singleLine = true)
                 OutlinedTextField(phone, { phone = it.filter(Char::isDigit).take(10) }, Modifier.fillMaxWidth(),
                     label = { Text("10-digit mobile number") }, singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone))
@@ -412,7 +410,7 @@ private fun VendorLogin(onSignedIn: (String) -> Unit) {
                                 } else {
                                     val response = withContext(Dispatchers.IO) {
                                         api("/api/vendor/auth/verify-otp", "POST",
-                                            JSONObject().put("name", name.trim()).put("phone", phone).put("code", otp))
+                                            JSONObject().put("phone", phone).put("code", otp))
                                     }
                                     val value = response.optString("token")
                                     if (value.isBlank()) throw IllegalStateException("Vendor session was not returned.")
@@ -422,7 +420,7 @@ private fun VendorLogin(onSignedIn: (String) -> Unit) {
                             finally { busy = false }
                         }
                     },
-                    enabled = !busy && name.isNotBlank() && phone.length == 10 && (!requested || otp.length == 6),
+                    enabled = !busy && phone.length == 10 && (!requested || otp.length == 6),
                     modifier = Modifier.fillMaxWidth().height(50.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Navy),
                 ) {
