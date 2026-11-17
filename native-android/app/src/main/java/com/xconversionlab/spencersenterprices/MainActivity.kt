@@ -295,9 +295,15 @@ private fun SpencersApp() {
                 operationsAuthorized = true
             } catch (error: Exception) {
                 operationsError = error.message ?: "Unable to load operations data."
-                if (operationsError.contains("authorization", ignoreCase = true)) {
+                val authFailure = (error is NativeApiException && error.httpStatus in listOf(401, 403)) ||
+                    operationsError.contains("authorization", ignoreCase = true) ||
+                    operationsError.contains("unauthorized", ignoreCase = true) ||
+                    operationsError.contains("forbidden", ignoreCase = true)
+                if (authFailure) {
                     operationsKey = ""
                     operationsAuthorized = false
+                    operationsOrders = emptyList()
+                    operationsComplaints = emptyList()
                 }
             } finally {
                 operationsLoading = false
@@ -781,6 +787,7 @@ private fun SpencersApp() {
                     onLogout = {
                         operationsKey = ""
                         operationsAuthorized = false
+                        operationsLoading = false
                         operationsOrders = emptyList()
                         operationsComplaints = emptyList()
                         operationsError = ""
@@ -853,6 +860,25 @@ private fun AdminScreen(
     var curdEnabled by remember(curd) { mutableStateOf(curd.enabled) }
     var showAllTickets by remember { mutableStateOf(false) }
     var formError by remember { mutableStateOf("") }
+    var orderQuery by remember { mutableStateOf("") }
+    var orderFilter by remember { mutableStateOf("all") }
+    var selectedOrder by remember { mutableStateOf<OperationsOrder?>(null) }
+    var ticketQuery by remember { mutableStateOf("") }
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    fun callCustomer(phone: String) {
+        val number = phone.filter { it.isDigit() || it == '+' }
+        if (number.isNotBlank()) runCatching {
+            context.startActivity(Intent(Intent.ACTION_DIAL, android.net.Uri.parse("tel:$number")))
+        }
+    }
+    fun whatsappCustomer(phone: String, message: String) {
+        val number = phone.filter(Char::isDigit)
+        if (number.isNotBlank()) runCatching {
+            val url = "https://wa.me/$number?text=" + java.net.URLEncoder.encode(message, "UTF-8")
+            context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)))
+        }
+    }
 
     if (!authorized) {
         Column(
@@ -893,6 +919,33 @@ private fun AdminScreen(
         return
     }
 
+    if (selectedOrder != null) {
+        val order = selectedOrder!!
+        AlertDialog(
+            onDismissRequest = { selectedOrder = null },
+            title = { Text("Order details") },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Text(order.id, fontWeight = FontWeight.ExtraBold, color = Navy)
+                    Text(order.customerName.ifBlank { "Customer" } + " · " + order.phone)
+                    Text("Status: " + order.status.replace('_', ' '))
+                    Divider()
+                    if (order.eggQuantity > 0) Text("Fresh Egg · ${order.eggQuantity} × ${money(order.eggUnitPricePaise)}")
+                    if (order.waterCanQuantity > 0) Text("Water Can · ${order.waterCanQuantity} × ${money(3000)}")
+                    if (order.milkQuantity > 0) Text("Milk · ${order.milkQuantity} × ${money(order.milkUnitPricePaise)}")
+                    if (order.curdQuantity > 0) Text("Curd · ${order.curdQuantity} × ${money(order.curdUnitPricePaise)}")
+                    if (order.bottleDepositPaise > 0) Text("Bottle deposit · ${money(order.bottleDepositPaise)}")
+                    Text("Total · ${money(order.totalPaise)}", fontWeight = FontWeight.Bold)
+                    Text("Payment · ${order.payment} / ${order.paymentStatus}")
+                    Text("Address · ${order.addressLabel} · ${order.deliveryAddress}")
+                    if (order.partnerName.isNotBlank()) Text("Delivery partner · ${order.partnerName} · ${order.partnerPhone}")
+                    Text("Placed · ${formatDate(order.createdAt)}")
+                }
+            },
+            confirmButton = { TextButton(onClick = { selectedOrder = null }) { Text("Close") } },
+        )
+    }
+
     if (cancelOrder != null) {
         AlertDialog(
             onDismissRequest = { cancelOrder = null },
@@ -920,10 +973,41 @@ private fun AdminScreen(
             }
             TextButton(onClick = onLogout) { Text("Lock", color = Color(0xFFB42318), fontWeight = FontWeight.Bold) }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OperationsStat("Total orders", orders.size.toString(), Modifier.weight(1f))
-            OperationsStat("Active", orders.count { it.status !in listOf("delivered", "cancelled") }.toString(), Modifier.weight(1f))
-            OperationsStat("Open support", complaints.count { it.status.equals("open", true) }.toString(), Modifier.weight(1f))
+        val activeCount = orders.count { it.status !in listOf("delivered", "cancelled") }
+        val deliveredCount = orders.count { it.status == "delivered" }
+        val cancelledCount = orders.count { it.status == "cancelled" }
+        val openTickets = complaints.count { it.status.equals("open", true) }
+        Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            OperationsStat("Total", orders.size.toString(), Modifier.weight(1f))
+            OperationsStat("Active", activeCount.toString(), Modifier.weight(1f))
+            OperationsStat("Delivered", deliveredCount.toString(), Modifier.weight(1f))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            OperationsStat("Cancelled", cancelledCount.toString(), Modifier.weight(1f))
+            OperationsStat("Open tickets", openTickets.toString(), Modifier.weight(1f))
+        }
+        Text("Order status distribution", color = Navy, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+        listOf(
+            "New" to orders.count { it.status == "placed" },
+            "Accepted" to orders.count { it.status == "accepted" },
+            "Preparing" to orders.count { it.status == "preparing" },
+            "Out for delivery" to orders.count { it.status == "out_for_delivery" },
+            "Delivered" to deliveredCount,
+            "Cancelled" to cancelledCount,
+        ).forEach { (label, count) ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(label, color = Muted, fontSize = 11.sp, modifier = Modifier.weight(1f))
+                Text(count.toString(), color = Navy, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+            }
+        }
+        Text("Product availability", color = Navy, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Milk: ${if (milk.enabled) "Available" else "Unavailable"}", color = if (milk.enabled) Green else Muted, fontSize = 11.sp)
+            Text("Curd: ${if (curd.enabled) "Available" else "Unavailable"}", color = if (curd.enabled) Green else Muted, fontSize = 11.sp)
+        }
+        Text("Recent orders", color = Navy, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+        orders.take(3).forEach { order ->
+            Text("${order.id} · ${order.customerName} · ${money(order.totalPaise)} · ${order.status.replace('_', ' ')}", color = Muted, fontSize = 11.sp)
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Orders", color = Navy, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
@@ -931,9 +1015,35 @@ private fun AdminScreen(
                 if (loading) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp) else Text("Refresh")
             }
         }
+        OutlinedTextField(
+            value = orderQuery, onValueChange = { orderQuery = it },
+            modifier = Modifier.fillMaxWidth(), singleLine = true,
+            label = { Text("Search order ID, customer or phone") },
+        )
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            listOf("all" to "All", "placed" to "New", "active" to "Active", "delivered" to "Delivered", "cancelled" to "Cancelled").forEach { (value, label) ->
+                FilterChip(selected = orderFilter == value, onClick = { orderFilter = value }, label = { Text(label) })
+            }
+        }
+        val visibleOrders = orders.filter { order ->
+            val query = orderQuery.trim().lowercase(Locale.US)
+            val digits = query.filter(Char::isDigit)
+            val matchesQuery = query.isBlank() ||
+                order.id.lowercase(Locale.US).contains(query) ||
+                order.customerName.lowercase(Locale.US).contains(query) ||
+                (digits.isNotBlank() && order.phone.filter(Char::isDigit).contains(digits))
+            val matchesFilter = when (orderFilter) {
+                "placed" -> order.status == "placed"
+                "active" -> order.status in listOf("accepted", "preparing", "out_for_delivery")
+                "delivered" -> order.status == "delivered"
+                "cancelled" -> order.status == "cancelled"
+                else -> true
+            }
+            matchesQuery && matchesFilter
+        }
         if (error.isNotBlank()) Text(error, color = Color(0xFFB42318), fontSize = 12.sp)
-        if (orders.isEmpty() && !loading) Text("No orders are available from the operations API yet.", color = Muted, fontSize = 13.sp)
-        orders.forEach { order ->
+        if (visibleOrders.isEmpty() && !loading) Text("No orders match this search or filter.", color = Muted, fontSize = 13.sp)
+        visibleOrders.forEach { order ->
             val nextStatus = when (order.status) {
                 "placed" -> "accepted"
                 "accepted" -> "preparing"
@@ -968,6 +1078,7 @@ private fun AdminScreen(
                             Text(money(order.totalPaise), color = Navy, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
                             Text("Payment: ${order.paymentStatus} · ${order.payment}", color = Muted, fontSize = 10.sp)
                         }
+                        TextButton(onClick = { selectedOrder = order }) { Text("Details") }
                         if (order.status !in listOf("cancelled", "delivered") && nextStatus.isNotBlank()) {
                             Button(onClick = { onUpdateOrder(order.id, nextStatus) }, colors = ButtonDefaults.buttonColors(containerColor = Blue)) {
                                 Text(when (nextStatus) {
@@ -983,6 +1094,10 @@ private fun AdminScreen(
                         TextButton(onClick = { cancelOrder = order }) { Text("Cancel order", color = Color(0xFFB42318), fontSize = 11.sp) }
                     }
                     if (order.partnerName.isNotBlank()) Text("Partner: ${order.partnerName} · ${order.partnerPhone}", color = Muted, fontSize = 11.sp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(onClick = { callCustomer(order.phone) }) { Text("Call customer") }
+                        TextButton(onClick = { whatsappCustomer(order.phone, "Hello ${order.customerName}, regarding Spencer's order ${order.id}.") }) { Text("WhatsApp") }
+                    }
                     Text(formatDate(order.createdAt), color = Muted, fontSize = 10.sp)
                 }
             }
@@ -1036,7 +1151,18 @@ private fun AdminScreen(
             Text("Customer support", color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp, modifier = Modifier.weight(1f))
             TextButton(onClick = { showAllTickets = !showAllTickets }) { Text(if (showAllTickets) "Open only" else "Show all") }
         }
-        val visibleComplaints = if (showAllTickets) complaints else complaints.filter { it.status.equals("open", true) }
+        OutlinedTextField(
+            value = ticketQuery, onValueChange = { ticketQuery = it },
+            modifier = Modifier.fillMaxWidth(), singleLine = true,
+            label = { Text("Search ticket, customer or phone") },
+        )
+        val visibleComplaints = (if (showAllTickets) complaints else complaints.filter { it.status.equals("open", true) }).filter { ticket ->
+            val query = ticketQuery.trim().lowercase(Locale.US)
+            val digits = query.filter(Char::isDigit)
+            query.isBlank() || ticket.id.lowercase(Locale.US).contains(query) ||
+                ticket.customerName.lowercase(Locale.US).contains(query) ||
+                (digits.isNotBlank() && ticket.phone.filter(Char::isDigit).contains(digits))
+        }
         if (visibleComplaints.isEmpty()) Text("No matching support tickets.", color = Muted, fontSize = 12.sp)
         visibleComplaints.forEach { ticket ->
             Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Line)) {
@@ -1047,6 +1173,10 @@ private fun AdminScreen(
                     }
                     Text(ticket.customerName + " · " + ticket.phone, color = Ink, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                     Text(ticket.message, color = Muted, fontSize = 12.sp, lineHeight = 18.sp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(onClick = { callCustomer(ticket.phone) }) { Text("Call") }
+                        TextButton(onClick = { whatsappCustomer(ticket.phone, "Hello ${ticket.customerName}, regarding your Spencer's Enterprises support ticket ${ticket.id}.") }) { Text("WhatsApp") }
+                    }
                     if (ticket.createdAt > 0) Text(formatDate(ticket.createdAt), color = Muted, fontSize = 10.sp)
                     Text("Ticket status is view-only because the current API does not expose an update action.", color = Muted, fontSize = 10.sp)
                 }
@@ -2225,6 +2355,8 @@ private fun saveWallet(prefs: SharedPreferences, entries: List<WalletTransaction
     prefs.edit().putString("wallet_entries", array.toString()).apply()
 }
 
+private class NativeApiException(message: String, val httpStatus: Int) : IllegalStateException(message)
+
 private fun nativeApiRequest(
     path: String,
     method: String,
@@ -2261,7 +2393,7 @@ private fun nativeApiRequest(
         val text = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
         val response = try { if (text.isBlank()) JSONObject() else JSONObject(text) } catch (_: Exception) { JSONObject() }
         if (status !in 200..299 || response.optBoolean("ok", status in 200..299).not()) {
-            throw IllegalStateException(response.optString("error").ifBlank { "Server request failed ($status)." })
+            throw NativeApiException(response.optString("error").ifBlank { "Server request failed ($status)." }, status)
         }
         return response
     } finally {
