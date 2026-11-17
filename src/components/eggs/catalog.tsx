@@ -78,7 +78,7 @@ export function ProductCard({ product }: { product: Product }) {
           <p className="mt-2 text-sm text-muted">{t({ en: "Not carried on this street’s shop.", ta: "இந்தத் தெருக் கடையில் இல்லை." })}</p>
         )}
         <div className="mt-2 flex flex-wrap gap-2">
-          {product.packs.slice(0, 4).map((pack) => (
+          {product.packs.filter((pack) => pack >= 10).slice(0, 4).map((pack) => (
             <Link
               key={pack}
               to="/product/$sku"
