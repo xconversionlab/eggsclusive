@@ -203,7 +203,7 @@ private fun SpencersApp() {
     val prefs = remember { context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE) }
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
-    var tab by rememberSaveable { mutableStateOf(MainTab.Order) }
+    var tab by remember { mutableStateOf(MainTab.Admin) }
     var historyPage by rememberSaveable { mutableStateOf("orders") }
     var profile by remember { mutableStateOf(loadProfile(prefs)) }
     var sessionToken by remember { mutableStateOf(prefs.getString("native_session_token", "").orEmpty()) }
