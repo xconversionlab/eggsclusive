@@ -87,6 +87,12 @@ private const val PREFS_NAME = "spencers_native_customer"
 
 private enum class MainTab(val label: String) { Order("Order"), Status("Status"), Profile("Profile") }
 
+private fun safeLatitude(value: Double): Double =
+    value.takeIf { it.isFinite() && it in -90.0..90.0 } ?: 0.0
+
+private fun safeLongitude(value: Double): Double =
+    value.takeIf { it.isFinite() && it in -180.0..180.0 } ?: 0.0
+
 private data class SavedAddress(
     val id: String,
     val label: String,
@@ -131,12 +137,16 @@ private data class CustomerProfile(
     fun selectedAddress(): SavedAddress = savedAddresses.firstOrNull { it.id == selectedAddressId }
         ?: SavedAddress("home", addressLabel, door, street, area, landmark, city, pincode, latitude, longitude)
     fun withAddress(address: SavedAddress): CustomerProfile {
-        val next = (savedAddresses.filterNot { it.id == address.id } + address).takeLast(4)
+        val normalized = address.copy(
+            latitude = safeLatitude(address.latitude),
+            longitude = safeLongitude(address.longitude),
+        )
+        val next = (savedAddresses.filterNot { it.id == normalized.id } + normalized).takeLast(4)
         return copy(
-            door = address.door, street = address.street, area = address.area, landmark = address.landmark,
-            city = address.city, pincode = address.pincode, addressLabel = address.label,
-            latitude = address.latitude, longitude = address.longitude,
-            savedAddresses = next, selectedAddressId = address.id,
+            door = normalized.door, street = normalized.street, area = normalized.area, landmark = normalized.landmark,
+            city = normalized.city, pincode = normalized.pincode, addressLabel = normalized.label,
+            latitude = normalized.latitude, longitude = normalized.longitude,
+            savedAddresses = next, selectedAddressId = normalized.id,
         )
     }
 }
@@ -215,30 +225,68 @@ private fun SpencersApp() {
     }
 
     fun saveProfile(next: CustomerProfile) {
-        val hasAddress = next.door.isNotBlank() || next.street.isNotBlank() || next.area.isNotBlank()
-        val addressId = next.selectedAddressId.ifBlank { "home" }
-        val selected = SavedAddress(addressId, next.addressLabel.ifBlank { "Home" }, next.door, next.street, next.area,
-            next.landmark, next.city, next.pincode, next.latitude, next.longitude)
-        val addresses = if (hasAddress) (next.savedAddresses.filterNot { it.id == addressId } + selected).takeLast(4) else next.savedAddresses
-        val saved = next.copy(savedAddresses = addresses, selectedAddressId = if (hasAddress) addressId else next.selectedAddressId)
+        val normalizedAddresses = next.savedAddresses.map { address ->
+            address.copy(latitude = safeLatitude(address.latitude), longitude = safeLongitude(address.longitude))
+        }
+        val normalized = next.copy(
+            latitude = safeLatitude(next.latitude),
+            longitude = safeLongitude(next.longitude),
+            savedAddresses = normalizedAddresses,
+        )
+        val hasAddress = normalized.door.isNotBlank() || normalized.street.isNotBlank() || normalized.area.isNotBlank()
+        val addressId = normalized.selectedAddressId.ifBlank { "home" }
+        val selected = SavedAddress(
+            addressId,
+            normalized.addressLabel.ifBlank { "Home" },
+            normalized.door,
+            normalized.street,
+            normalized.area,
+            normalized.landmark,
+            normalized.city,
+            normalized.pincode,
+            normalized.latitude,
+            normalized.longitude,
+        )
+        val addresses = if (hasAddress) {
+            (normalized.savedAddresses.filterNot { it.id == addressId } + selected).takeLast(4)
+        } else normalized.savedAddresses
+        val saved = normalized.copy(
+            savedAddresses = addresses,
+            selectedAddressId = if (hasAddress) addressId else normalized.selectedAddressId,
+        )
         profile = saved
         val array = JSONArray()
-        addresses.forEach { address -> array.put(JSONObject().apply {
-            put("id", address.id); put("label", address.label); put("door", address.door)
-            put("street", address.street); put("area", address.area); put("landmark", address.landmark)
-            put("city", address.city); put("pincode", address.pincode)
-            put("latitude", address.latitude); put("longitude", address.longitude)
-            put("isDefault", address.id == saved.selectedAddressId)
-        }) }
-        prefs.edit().putString("profile_name", saved.name).putString("profile_phone", saved.phone)
-            .putString("profile_door", saved.door).putString("profile_street", saved.street)
-            .putString("profile_area", saved.area).putString("profile_landmark", saved.landmark)
-            .putString("profile_city", saved.city).putString("profile_pincode", saved.pincode)
+        addresses.forEach { address ->
+            array.put(JSONObject().apply {
+                put("id", address.id)
+                put("label", address.label)
+                put("door", address.door)
+                put("street", address.street)
+                put("area", address.area)
+                put("landmark", address.landmark)
+                put("city", address.city)
+                put("pincode", address.pincode)
+                put("latitude", safeLatitude(address.latitude))
+                put("longitude", safeLongitude(address.longitude))
+                put("isDefault", address.id == saved.selectedAddressId)
+            })
+        }
+        prefs.edit()
+            .putString("profile_name", saved.name)
+            .putString("profile_phone", saved.phone)
+            .putString("profile_door", saved.door)
+            .putString("profile_street", saved.street)
+            .putString("profile_area", saved.area)
+            .putString("profile_landmark", saved.landmark)
+            .putString("profile_city", saved.city)
+            .putString("profile_pincode", saved.pincode)
             .putString("profile_address_label", saved.addressLabel)
             .putString("profile_selected_address_id", saved.selectedAddressId)
             .putString("profile_saved_addresses", array.toString())
-            .putFloat("profile_latitude", saved.latitude.toFloat()).putFloat("profile_longitude", saved.longitude.toFloat())
-            .putBoolean("profile_phone_verified", saved.phoneVerified).apply()
+            .putFloat("profile_latitude", safeLatitude(saved.latitude).toFloat())
+            .putFloat("profile_longitude", safeLongitude(saved.longitude).toFloat())
+            .putBoolean("profile_phone_verified", saved.phoneVerified)
+            .apply()
         if (sessionToken.isNotBlank()) {
             val addressBody = JSONObject().put("addresses", array)
             scope.launch {
@@ -288,8 +336,8 @@ private fun SpencersApp() {
                     .put("landmark", profile.landmark)
                     .put("city", profile.city)
                     .put("pincode", profile.pincode)
-                    .put("latitude", profile.latitude)
-                    .put("longitude", profile.longitude)
+                    .put("latitude", safeLatitude(profile.latitude))
+                    .put("longitude", safeLongitude(profile.longitude))
                 val requestBody = JSONObject()
                     .put("eggQuantity", eggQuantity)
                     .put("waterCanQuantity", if (waterCanIncluded) waterQuantity else 0)
@@ -435,8 +483,8 @@ private fun SpencersApp() {
                         item.optString("landmark"),
                         item.optString("city"),
                         item.optString("pincode"),
-                        item.optDouble("latitude"),
-                        item.optDouble("longitude"),
+                        safeLatitude(item.optDouble("latitude", 0.0)),
+                        safeLongitude(item.optDouble("longitude", 0.0)),
                     )
                 }.takeLast(4)
                 if (savedAddresses.isNotEmpty()) {
@@ -551,8 +599,8 @@ private fun SpencersApp() {
                 scope.launch {
                     val resolved = reverseGeocodeLocation(context, latitude, longitude)
                     val next = profile.copy(
-                        latitude = latitude,
-                        longitude = longitude,
+                        latitude = safeLatitude(latitude),
+                        longitude = safeLongitude(longitude),
                         street = resolved?.street?.takeIf { it.isNotBlank() } ?: profile.street,
                         area = resolved?.area?.takeIf { it.isNotBlank() } ?: profile.area,
                         city = resolved?.city?.takeIf { it.isNotBlank() } ?: profile.city,
@@ -1231,14 +1279,40 @@ private fun ProfileScreen(
 ) {
     var complaint by rememberSaveable { mutableStateOf("") }
     var showAddAddress by rememberSaveable { mutableStateOf(false) }
-    var newLabel by rememberSaveable { mutableStateOf(profile.addressLabel.ifBlank { "Home" }) }
-    var selectedAddressType by rememberSaveable { mutableStateOf(addressTypeFor(profile.addressLabel.ifBlank { "Home" })) }
-    var newDoor by rememberSaveable { mutableStateOf(profile.door) }
-    var newStreet by rememberSaveable { mutableStateOf(profile.street) }
-    var newArea by rememberSaveable { mutableStateOf(profile.area) }
-    var newLandmark by rememberSaveable { mutableStateOf(profile.landmark) }
-    var newCity by rememberSaveable { mutableStateOf(profile.city) }
-    var newPincode by rememberSaveable { mutableStateOf(profile.pincode) }
+    var editingAddressId by rememberSaveable { mutableStateOf("") }
+    var newLabel by rememberSaveable { mutableStateOf("Home") }
+    var selectedAddressType by rememberSaveable { mutableStateOf("Home") }
+    var newDoor by rememberSaveable { mutableStateOf("") }
+    var newStreet by rememberSaveable { mutableStateOf("") }
+    var newArea by rememberSaveable { mutableStateOf("") }
+    var newLandmark by rememberSaveable { mutableStateOf("") }
+    var newCity by rememberSaveable { mutableStateOf("") }
+    var newPincode by rememberSaveable { mutableStateOf("") }
+
+    fun resetAddressForm() {
+        editingAddressId = ""
+        newLabel = "Home"
+        selectedAddressType = "Home"
+        newDoor = ""
+        newStreet = ""
+        newArea = ""
+        newLandmark = ""
+        newCity = ""
+        newPincode = ""
+    }
+
+    fun startEditingAddress(address: SavedAddress) {
+        editingAddressId = address.id
+        newLabel = address.label
+        selectedAddressType = addressTypeFor(address.label)
+        newDoor = address.door
+        newStreet = address.street
+        newArea = address.area
+        newLandmark = address.landmark
+        newCity = address.city
+        newPincode = address.pincode
+        showAddAddress = true
+    }
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding().padding(horizontal = 16.dp, vertical = 16.dp),
@@ -1285,9 +1359,18 @@ private fun ProfileScreen(
                             Text(address.label, color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 13.sp)
                             Text(address.displayAddress, color = Muted, fontSize = 10.sp, lineHeight = 15.sp)
                         }
-                        if (selected) {
-                            Text("Selected", color = Blue, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold)
-                        } else TextButton(onClick = { onSave(profile.withAddress(address)) }) { Text("Use", color = Blue) }
+                        Column(horizontalAlignment = Alignment.End) {
+                            if (selected) {
+                                Text("Selected", color = Blue, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold)
+                            } else {
+                                TextButton(onClick = { onSave(profile.withAddress(address)) }) {
+                                    Text("Use", color = Blue)
+                                }
+                            }
+                            TextButton(onClick = { startEditingAddress(address) }) {
+                                Text("Edit", color = Navy)
+                            }
+                        }
                     }
                 }
             }
@@ -1298,8 +1381,7 @@ private fun ProfileScreen(
         if (profile.savedAddresses.size < 4) {
             OutlinedButton(
                 onClick = {
-                    newLabel = profile.addressLabel.ifBlank { "Home" }
-                    selectedAddressType = addressTypeFor(newLabel)
+                    resetAddressForm()
                     showAddAddress = true
                 },
                 modifier = Modifier.fillMaxWidth().height(52.dp),
@@ -1351,7 +1433,10 @@ private fun ProfileScreen(
 
     if (showAddAddress) {
         Dialog(
-            onDismissRequest = { showAddAddress = false },
+            onDismissRequest = {
+                showAddAddress = false
+                resetAddressForm()
+            },
             properties = DialogProperties(usePlatformDefaultWidth = false),
         ) {
             Surface(
@@ -1370,9 +1455,18 @@ private fun ProfileScreen(
                         Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 18.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
-                        Text("Add a saved address", color = Navy, fontSize = 19.sp, fontWeight = FontWeight.ExtraBold)
                         Text(
-                            "Enter the delivery details and choose how to label this address.",
+                            if (editingAddressId.isBlank()) "Add a saved address" else "Edit saved address",
+                            color = Navy,
+                            fontSize = 19.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                        )
+                        Text(
+                            if (editingAddressId.isBlank()) {
+                                "Enter the delivery details and choose how to label this address."
+                            } else {
+                                "Update this saved address. Your existing address label and map pin are preserved unless changed."
+                            },
                             color = Muted,
                             fontSize = 12.sp,
                             lineHeight = 17.sp,
@@ -1418,7 +1512,10 @@ private fun ProfileScreen(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         OutlinedButton(
-                            onClick = { showAddAddress = false },
+                            onClick = {
+                                showAddAddress = false
+                                resetAddressForm()
+                            },
                             modifier = Modifier.weight(1f).height(52.dp),
                             shape = RoundedCornerShape(14.dp),
                         ) { Text("Cancel", color = Navy) }
@@ -1428,22 +1525,32 @@ private fun ProfileScreen(
                                 newCity.isNotBlank() && newPincode.length == 6,
                             onClick = {
                                 val addressLabel = if (selectedAddressType == "Other") newLabel.trim() else selectedAddressType
+                                val existing = profile.savedAddresses.firstOrNull { it.id == editingAddressId }
                                 val address = SavedAddress(
-                                    "addr-" + System.currentTimeMillis(), addressLabel, newDoor.trim(), newStreet.trim(),
-                                    newArea.trim(), newLandmark.trim(), newCity.trim(), newPincode,
-                                    0.0, 0.0,
+                                    editingAddressId.ifBlank { "addr-" + System.currentTimeMillis() },
+                                    addressLabel,
+                                    newDoor.trim(),
+                                    newStreet.trim(),
+                                    newArea.trim(),
+                                    newLandmark.trim(),
+                                    newCity.trim(),
+                                    newPincode,
+                                    safeLatitude(existing?.latitude ?: 0.0),
+                                    safeLongitude(existing?.longitude ?: 0.0),
                                 )
                                 onSave(profile.withAddress(address))
                                 showAddAddress = false
-                                newLabel = "Home"
-                                selectedAddressType = "Home"
-                                newDoor = ""; newStreet = ""; newArea = ""; newLandmark = ""
-                                newCity = profile.city; newPincode = ""
+                                resetAddressForm()
                             },
                             modifier = Modifier.weight(1.25f).height(52.dp),
                             shape = RoundedCornerShape(14.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = Navy),
-                        ) { Text("Save address", fontWeight = FontWeight.Bold) }
+                        ) {
+                            Text(
+                                if (editingAddressId.isBlank()) "Save address" else "Save changes",
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
                     }
                 }
             }
@@ -1727,8 +1834,8 @@ private fun loadProfile(prefs: SharedPreferences): CustomerProfile {
     val city = prefs.getString("profile_city", "").orEmpty()
     val pincode = prefs.getString("profile_pincode", "").orEmpty()
     val label = prefs.getString("profile_address_label", "Home").orEmpty().ifBlank { "Home" }
-    val latitude = prefs.getFloat("profile_latitude", 0.0f).toDouble()
-    val longitude = prefs.getFloat("profile_longitude", 0.0f).toDouble()
+    val latitude = safeLatitude(prefs.getFloat("profile_latitude", 0.0f).toDouble())
+    val longitude = safeLongitude(prefs.getFloat("profile_longitude", 0.0f).toDouble())
     val addresses = try {
         val array = JSONArray(prefs.getString("profile_saved_addresses", "[]"))
         (0 until array.length()).map { i ->
@@ -1737,7 +1844,8 @@ private fun loadProfile(prefs: SharedPreferences): CustomerProfile {
                 item.optString("id"), item.optString("label", "Home"), item.optString("door"),
                 item.optString("street"), item.optString("area"), item.optString("landmark"),
                 item.optString("city"), item.optString("pincode"),
-                item.optDouble("latitude", latitude), item.optDouble("longitude", longitude),
+                safeLatitude(item.optDouble("latitude", latitude)),
+                safeLongitude(item.optDouble("longitude", longitude)),
             )
         }.takeLast(4)
     } catch (_: Exception) { emptyList() }
