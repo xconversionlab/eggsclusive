@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { getSql, dbSource } from "./db";
-import { requestPhoneOtp, verifyPhoneOtp, tokenDigest } from "./native-api.server";
+import { requestPhoneOtp, verifyPhoneOtp, tokenDigest, dispatchOrderStatusSms } from "./native-api.server";
 import { normalizeIndianPhone } from "./customer-otp.server";
 
 type Row = Record<string, unknown>;
@@ -151,7 +151,7 @@ export async function updateVendorOrderStatus(orderId: string, request: Request,
   const note = typeof value.note === "string" ? value.note.trim().slice(0, 240) : "";
   const sql = await getSql();
   const current = await sql.query<Row>(
-    "select status,payment_status,payment_method from native_orders where id=$1 and vendor_id=$2 limit 1",
+    "select status,payment_status,payment_method,customer_phone from native_orders where id=$1 and vendor_id=$2 limit 1",
     [orderId, auth.vendor.id],
   );
   if (!current[0]) return { ok: false as const, status: 404, error: "Order was not found for this vendor." };
@@ -194,7 +194,8 @@ export async function updateVendorOrderStatus(orderId: string, request: Request,
     "insert into native_order_events(id,order_id,from_status,to_status,note,actor) values($1,$2,$3,$4,$5,$6)",
     [randomUUID(), orderId, previous, status, note || "Updated by vendor", "vendor:" + auth.vendor.id],
   );
-  return { ok: true as const, orderId, status, paymentStatus };
+  const notification = await dispatchOrderStatusSms(sql, orderId, String(current[0].customer_phone), status);
+  return { ok: true as const, orderId, status, paymentStatus, notification };
 }
 
 export async function getVendorStock(request: Request) {
