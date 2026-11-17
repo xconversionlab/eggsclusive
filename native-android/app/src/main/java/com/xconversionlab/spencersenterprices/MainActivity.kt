@@ -58,6 +58,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -85,7 +86,7 @@ internal val Green = Color(0xFF16845A)
 private const val PRICE_PER_EGG_PAISE = 700
 private const val PREFS_NAME = "spencers_native_customer"
 
-private enum class MainTab(val label: String) { Order("Order"), Status("Status"), Profile("Profile") }
+private enum class MainTab(val label: String) { Order("Order"), Status("Status"), Profile("Profile"), Admin("Admin") }
 
 private data class SavedAddress(
     val id: String,
@@ -164,6 +165,21 @@ private data class WalletTransaction(
     val id: String, val createdAt: Long, val title: String, val amountPaise: Int, val balancePaise: Int,
 )
 
+private data class OperationsOrder(
+    val id: String, val customerName: String, val phone: String,
+    val eggQuantity: Int, val eggUnitPricePaise: Int, val waterCanQuantity: Int,
+    val milkQuantity: Int, val curdQuantity: Int, val milkUnitPricePaise: Int,
+    val curdUnitPricePaise: Int, val bottleDepositPaise: Int, val totalPaise: Int,
+    val payment: String, val paymentStatus: String, val status: String,
+    val partnerName: String, val partnerPhone: String, val addressLabel: String,
+    val deliveryAddress: String, val createdAt: Long,
+)
+
+private data class OperationsComplaint(
+    val id: String, val customerName: String, val phone: String,
+    val message: String, val status: String, val createdAt: Long,
+)
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -208,6 +224,86 @@ private fun SpencersApp() {
     var showSplash by rememberSaveable { mutableStateOf(true) }
     var waterCanIncluded by rememberSaveable { mutableStateOf(false) }
     var placingOrder by remember { mutableStateOf(false) }
+
+    // Operations credentials remain only in Compose memory for this app session.
+    var operationsKey by remember { mutableStateOf("") }
+    var operationsAuthorized by remember { mutableStateOf(false) }
+    var operationsLoading by remember { mutableStateOf(false) }
+    var operationsError by remember { mutableStateOf("") }
+    var operationsOrders by remember { mutableStateOf(emptyList<OperationsOrder>()) }
+    var operationsComplaints by remember { mutableStateOf(emptyList<OperationsComplaint>()) }
+    var operationsMilkCatalog by remember { mutableStateOf(CatalogProduct()) }
+    var operationsCurdCatalog by remember { mutableStateOf(CatalogProduct()) }
+
+    fun refreshOperations() {
+        val key = operationsKey
+        if (key.isBlank()) return
+        scope.launch {
+            operationsLoading = true
+            operationsError = ""
+            try {
+                val payload = withContext(Dispatchers.IO) {
+                    Triple(
+                        nativeApiRequest("/api/native/ops/orders", "GET", operationsKey = key),
+                        nativeApiRequest("/api/native/ops/catalog", "GET", operationsKey = key),
+                        nativeApiRequest("/api/native/ops/complaints", "GET", operationsKey = key),
+                    )
+                }
+                val orderRows = payload.first.optJSONArray("orders") ?: JSONArray()
+                operationsOrders = (0 until orderRows.length()).mapNotNull { index ->
+                    val item = orderRows.optJSONObject(index) ?: return@mapNotNull null
+                    OperationsOrder(
+                        id = item.optString("id"),
+                        customerName = item.optString("customerName"),
+                        phone = item.optString("phone"),
+                        eggQuantity = item.optInt("eggQuantity", item.optInt("quantity")),
+                        eggUnitPricePaise = item.optInt("eggUnitPricePaise", 700),
+                        waterCanQuantity = item.optInt("waterCanQuantity"),
+                        milkQuantity = item.optInt("milkQuantity"),
+                        curdQuantity = item.optInt("curdQuantity"),
+                        milkUnitPricePaise = item.optInt("milkUnitPricePaise"),
+                        curdUnitPricePaise = item.optInt("curdUnitPricePaise"),
+                        bottleDepositPaise = item.optInt("bottleDepositPaise"),
+                        totalPaise = item.optInt("totalPaise"),
+                        payment = item.optString("payment"),
+                        paymentStatus = item.optString("paymentStatus", "pending"),
+                        status = item.optString("status", "placed"),
+                        partnerName = item.optString("partnerName"),
+                        partnerPhone = item.optString("partnerPhone"),
+                        addressLabel = item.optString("addressLabel"),
+                        deliveryAddress = item.optString("deliveryAddress"),
+                        createdAt = item.optLong("createdAt"),
+                    )
+                }
+                val catalog = payload.second.optJSONObject("catalog") ?: JSONObject()
+                val milk = catalog.optJSONObject("milk") ?: JSONObject()
+                val curd = catalog.optJSONObject("curd") ?: JSONObject()
+                operationsMilkCatalog = CatalogProduct(milk.optInt("unitPricePaise"), milk.optString("packLabel"), milk.optBoolean("enabled"))
+                operationsCurdCatalog = CatalogProduct(curd.optInt("unitPricePaise"), curd.optString("packLabel"), curd.optBoolean("enabled"))
+                val rows = payload.third.optJSONArray("complaints") ?: JSONArray()
+                operationsComplaints = (0 until rows.length()).mapNotNull { index ->
+                    val item = rows.optJSONObject(index) ?: return@mapNotNull null
+                    OperationsComplaint(
+                        id = item.optString("id"),
+                        customerName = item.optString("customer_name"),
+                        phone = item.optString("customer_phone"),
+                        message = item.optString("message"),
+                        status = item.optString("status", "open"),
+                        createdAt = runCatching { java.time.Instant.parse(item.optString("created_at")).toEpochMilli() }.getOrDefault(0L),
+                    )
+                }
+                operationsAuthorized = true
+            } catch (error: Exception) {
+                operationsError = error.message ?: "Unable to load operations data."
+                if (operationsError.contains("authorization", ignoreCase = true)) {
+                    operationsKey = ""
+                    operationsAuthorized = false
+                }
+            } finally {
+                operationsLoading = false
+            }
+        }
+    }
 
     LaunchedEffect(Unit) {
         delay(950)
@@ -599,6 +695,13 @@ private fun SpencersApp() {
                     label = { Text("Profile") },
                     colors = itemColors,
                 )
+                NavigationBarItem(
+                    selected = tab == MainTab.Admin,
+                    onClick = { tab = MainTab.Admin },
+                    icon = { Icon(Icons.Filled.AccountCircle, null) },
+                    label = { Text("Admin") },
+                    colors = itemColors,
+                )
             }
         },
     ) { inner ->
@@ -662,10 +765,309 @@ private fun SpencersApp() {
                         }
                     }
                 )
+                MainTab.Admin -> AdminScreen(
+                    authorized = operationsAuthorized,
+                    orders = operationsOrders,
+                    complaints = operationsComplaints,
+                    milk = operationsMilkCatalog,
+                    curd = operationsCurdCatalog,
+                    loading = operationsLoading,
+                    error = operationsError,
+                    onUnlock = { key ->
+                        operationsKey = key.trim()
+                        refreshOperations()
+                    },
+                    onRefresh = { refreshOperations() },
+                    onLogout = {
+                        operationsKey = ""
+                        operationsAuthorized = false
+                        operationsOrders = emptyList()
+                        operationsComplaints = emptyList()
+                        operationsError = ""
+                    },
+                    onUpdateOrder = { orderId, status ->
+                        scope.launch {
+                            try {
+                                val result = withContext(Dispatchers.IO) {
+                                    nativeApiRequest(
+                                        "/api/native/ops/orders/$orderId/status",
+                                        "POST",
+                                        JSONObject().put("status", status),
+                                        operationsKey = operationsKey,
+                                    )
+                                }
+                                snackbar.showSnackbar(if (result.optBoolean("refundApplied")) {
+                                    "Order cancelled and refund credited to the customer wallet."
+                                } else "Order status updated.")
+                                refreshOperations()
+                            } catch (error: Exception) {
+                                snackbar.showSnackbar(error.message ?: "Could not update the order.")
+                            }
+                        }
+                    },
+                    onSaveCatalog = { milkItem, curdItem ->
+                        scope.launch {
+                            try {
+                                val body = JSONObject()
+                                    .put("milk", JSONObject().put("unitPricePaise", milkItem.unitPricePaise).put("packLabel", milkItem.packLabel).put("enabled", milkItem.enabled))
+                                    .put("curd", JSONObject().put("unitPricePaise", curdItem.unitPricePaise).put("packLabel", curdItem.packLabel).put("enabled", curdItem.enabled))
+                                withContext(Dispatchers.IO) {
+                                    nativeApiRequest("/api/native/ops/catalog", "POST", body, operationsKey = operationsKey)
+                                }
+                                snackbar.showSnackbar("Milk and Curd catalogue saved.")
+                                refreshOperations()
+                            } catch (error: Exception) {
+                                snackbar.showSnackbar(error.message ?: "Could not save catalogue.")
+                            }
+                        }
+                    },
+                )
             }
         }
     }
 
+}
+
+@Composable
+private fun AdminScreen(
+    authorized: Boolean,
+    orders: List<OperationsOrder>,
+    complaints: List<OperationsComplaint>,
+    milk: CatalogProduct,
+    curd: CatalogProduct,
+    loading: Boolean,
+    error: String,
+    onUnlock: (String) -> Unit,
+    onRefresh: () -> Unit,
+    onLogout: () -> Unit,
+    onUpdateOrder: (String, String) -> Unit,
+    onSaveCatalog: (CatalogProduct, CatalogProduct) -> Unit,
+) {
+    var key by remember { mutableStateOf("") }
+    var cancelOrder by remember { mutableStateOf<OperationsOrder?>(null) }
+    var milkPack by remember(milk) { mutableStateOf(milk.packLabel) }
+    var milkPrice by remember(milk) { mutableStateOf(if (milk.unitPricePaise > 0) "%.2f".format(Locale.US, milk.unitPricePaise / 100.0) else "") }
+    var milkEnabled by remember(milk) { mutableStateOf(milk.enabled) }
+    var curdPack by remember(curd) { mutableStateOf(curd.packLabel) }
+    var curdPrice by remember(curd) { mutableStateOf(if (curd.unitPricePaise > 0) "%.2f".format(Locale.US, curd.unitPricePaise / 100.0) else "") }
+    var curdEnabled by remember(curd) { mutableStateOf(curd.enabled) }
+    var showAllTickets by remember { mutableStateOf(false) }
+    var formError by remember { mutableStateOf("") }
+
+    if (!authorized) {
+        Column(
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding().padding(22.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            BrandMark(58.dp, onDark = false, animate = false)
+            Text("Operations Console", color = Navy, fontSize = 25.sp, fontWeight = FontWeight.ExtraBold)
+            Text("Restricted access for Spencer's Enterprises staff. Enter the operations access key to manage live orders and catalogue settings.", color = Muted, fontSize = 14.sp, lineHeight = 21.sp)
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                shape = RoundedCornerShape(22.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Line),
+            ) {
+                Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Admin authentication", color = Navy, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    OutlinedTextField(
+                        value = key, onValueChange = { key = it }, modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Operations access key") }, singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    )
+                    Button(
+                        onClick = { onUnlock(key) },
+                        enabled = key.isNotBlank() && !loading,
+                        modifier = Modifier.fillMaxWidth().height(50.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Navy),
+                    ) {
+                        if (loading) CircularProgressIndicator(Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
+                        else Text("Unlock Admin Mode", fontWeight = FontWeight.Bold)
+                    }
+                    Text("The key is used only for this app session and is not saved on this phone.", color = Muted, fontSize = 11.sp)
+                    if (error.isNotBlank()) Text(error, color = Color(0xFFB42318), fontSize = 12.sp)
+                }
+            }
+        }
+        return
+    }
+
+    if (cancelOrder != null) {
+        AlertDialog(
+            onDismissRequest = { cancelOrder = null },
+            title = { Text("Cancel this order?") },
+            text = { Text("This will mark ${{cancelOrder!!.id} as cancelled. Any refund follows the server's payment-status rule.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    cancelOrder?.let { onUpdateOrder(it.id, "cancelled") }
+                    cancelOrder = null
+                }) { Text("Confirm cancellation", color = Color(0xFFB42318)) }
+            },
+            dismissButton = { TextButton(onClick = { cancelOrder = null }) { Text("Keep order") } },
+        )
+    }
+
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text("SPENCERS ENTERPRISES", color = Blue, fontWeight = FontWeight.ExtraBold, fontSize = 10.sp, letterSpacing = 1.3.sp)
+                Text("Operations Console", color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 23.sp)
+                Text("Live business operations", color = Muted, fontSize = 12.sp)
+            }
+            TextButton(onClick = onLogout) { Text("Lock", color = Color(0xFFB42318), fontWeight = FontWeight.Bold) }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OperationsStat("Total orders", orders.size.toString(), Modifier.weight(1f))
+            OperationsStat("Active", orders.count { it.status !in listOf("delivered", "cancelled") }.toString(), Modifier.weight(1f))
+            OperationsStat("Open support", complaints.count { it.status.equals("open", true) }.toString(), Modifier.weight(1f))
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Orders", color = Navy, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
+            TextButton(onClick = onRefresh, enabled = !loading) {
+                if (loading) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp) else Text("Refresh")
+            }
+        }
+        if (error.isNotBlank()) Text(error, color = Color(0xFFB42318), fontSize = 12.sp)
+        if (orders.isEmpty() && !loading) Text("No orders are available from the operations API yet.", color = Muted, fontSize = 13.sp)
+        orders.forEach { order ->
+            val nextStatus = when (order.status) {
+                "placed" -> "accepted"
+                "accepted" -> "preparing"
+                "preparing" -> "out_for_delivery"
+                "out_for_delivery" -> "delivered"
+                else -> ""
+            }
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                shape = RoundedCornerShape(18.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Line),
+            ) {
+                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(order.id, color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                        Text(order.status.replace('_', ' ').uppercase(), color = if (order.status == "cancelled") Color(0xFFB42318) else Green, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold)
+                    }
+                    Text(order.customerName.ifBlank { "Customer" } + " · " + order.phone, color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                    Text(
+                        listOfNotNull(
+                            if (order.eggQuantity > 0) "Egg × ${{order.eggQuantity}" else null,
+                            if (order.waterCanQuantity > 0) "Water × ${{order.waterCanQuantity}" else null,
+                            if (order.milkQuantity > 0) "Milk × ${{order.milkQuantity}" else null,
+                            if (order.curdQuantity > 0) "Curd × ${{order.curdQuantity}" else null,
+                        ).joinToString("  ·  "),
+                        color = Muted, fontSize = 12.sp,
+                    )
+                    if (order.deliveryAddress.isNotBlank()) Text((order.addressLabel.ifBlank { "Delivery" }) + ": " + order.deliveryAddress, color = Muted, fontSize = 11.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(money(order.totalPaise), color = Navy, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
+                            Text("Payment: ${{order.paymentStatus} · ${{order.payment}", color = Muted, fontSize = 10.sp)
+                        }
+                        if (order.status !in listOf("cancelled", "delivered") && nextStatus.isNotBlank()) {
+                            Button(onClick = { onUpdateOrder(order.id, nextStatus) }, colors = ButtonDefaults.buttonColors(containerColor = Blue)) {
+                                Text(when (nextStatus) {
+                                    "accepted" -> "Accept"
+                                    "preparing" -> "Preparing"
+                                    "out_for_delivery" -> "Dispatch"
+                                    else -> "Delivered"
+                                }, fontSize = 11.sp)
+                            }
+                        }
+                    }
+                    if (order.status !in listOf("cancelled", "delivered")) {
+                        TextButton(onClick = { cancelOrder = order }) { Text("Cancel order", color = Color(0xFFB42318), fontSize = 11.sp) }
+                    }
+                    if (order.partnerName.isNotBlank()) Text("Partner: ${{order.partnerName} · ${{order.partnerPhone}", color = Muted, fontSize = 11.sp)
+                    Text(formatDate(order.createdAt), color = Muted, fontSize = 10.sp)
+                }
+            }
+        }
+
+        Divider(color = Line, thickness = 1.dp)
+        Text("Product catalogue", color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
+        Text("Water Can and Fresh Egg retain their fixed server-side prices. Only Milk and Curd are editable here.", color = Muted, fontSize = 12.sp, lineHeight = 18.sp)
+        Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(18.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Line)) {
+            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                Text("🥛 Milk", color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
+                OutlinedTextField(value = milkPack, onValueChange = { milkPack = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Pack size / label") }, singleLine = true)
+                OutlinedTextField(value = milkPrice, onValueChange = { milkPrice = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Price (₹)") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Available to customers", color = Ink, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                    Switch(checked = milkEnabled, onCheckedChange = { milkEnabled = it })
+                }
+            }
+        }
+        Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(18.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Line)) {
+            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                Text("Curd", color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
+                OutlinedTextField(value = curdPack, onValueChange = { curdPack = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Pack size / label") }, singleLine = true)
+                OutlinedTextField(value = curdPrice, onValueChange = { curdPrice = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Price (₹)") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Available to customers", color = Ink, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                    Switch(checked = curdEnabled, onCheckedChange = { curdEnabled = it })
+                }
+            }
+        }
+        Button(
+            onClick = {
+                val milkPaise = milkPrice.trim().toDoubleOrNull()?.let { (it * 100).toInt() }
+                val curdPaise = curdPrice.trim().toDoubleOrNull()?.let { (it * 100).toInt() }
+                if (milkPaise == null || curdPaise == null || milkPaise < 0 || curdPaise < 0 ||
+                    (milkEnabled && (milkPaise == 0 || milkPack.isBlank())) ||
+                    (curdEnabled && (curdPaise == 0 || curdPack.isBlank()))) {
+                    formError = "Enter a valid price and pack label for each enabled product."
+                } else {
+                    formError = ""
+                    onSaveCatalog(CatalogProduct(milkPaise, milkPack.trim(), milkEnabled), CatalogProduct(curdPaise, curdPack.trim(), curdEnabled))
+                }
+            },
+            modifier = Modifier.fillMaxWidth().height(50.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Navy),
+        ) { Text("Save catalogue changes", fontWeight = FontWeight.Bold) }
+        if (formError.isNotBlank()) Text(formError, color = Color(0xFFB42318), fontSize = 11.sp)
+
+        Divider(color = Line, thickness = 1.dp)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Customer support", color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp, modifier = Modifier.weight(1f))
+            TextButton(onClick = { showAllTickets = !showAllTickets }) { Text(if (showAllTickets) "Open only" else "Show all") }
+        }
+        val visibleComplaints = if (showAllTickets) complaints else complaints.filter { it.status.equals("open", true) }
+        if (visibleComplaints.isEmpty()) Text("No matching support tickets.", color = Muted, fontSize = 12.sp)
+        visibleComplaints.forEach { ticket ->
+            Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Line)) {
+                Column(Modifier.fillMaxWidth().padding(13.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(ticket.id, color = Navy, fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                        Text(ticket.status.uppercase(), color = if (ticket.status.equals("open", true)) Blue else Muted, fontWeight = FontWeight.Bold, fontSize = 10.sp)
+                    }
+                    Text(ticket.customerName + " · " + ticket.phone, color = Ink, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Text(ticket.message, color = Muted, fontSize = 12.sp, lineHeight = 18.sp)
+                    if (ticket.createdAt > 0) Text(formatDate(ticket.createdAt), color = Muted, fontSize = 10.sp)
+                    Text("Ticket status is view-only because the current API does not expose an update action.", color = Muted, fontSize = 10.sp)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OperationsStat(label: String, value: String, modifier: Modifier = Modifier) {
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        shape = RoundedCornerShape(16.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Line),
+    ) {
+        Column(Modifier.fillMaxWidth().padding(11.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            Text(value, color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 21.sp)
+            Text(label, color = Muted, fontSize = 10.sp)
+        }
+    }
 }
 
 private fun loadClientWaterCanImage(context: Context): androidx.compose.ui.graphics.ImageBitmap? = runCatching {
@@ -1828,6 +2230,7 @@ private fun nativeApiRequest(
     method: String,
     body: JSONObject? = null,
     bearerToken: String? = null,
+    operationsKey: String? = null,
 ): JSONObject {
     val base = BuildConfig.API_BASE_URL.trimEnd('/')
     val connection = (java.net.URL(base + path).openConnection() as java.net.HttpURLConnection).apply {
@@ -1842,6 +2245,9 @@ private fun nativeApiRequest(
         }
         if (!bearerToken.isNullOrBlank()) {
             setRequestProperty("Authorization", "Bearer $bearerToken")
+        }
+        if (!operationsKey.isNullOrBlank()) {
+            setRequestProperty("X-Native-Ops-Key", operationsKey)
         }
     }
     try {
