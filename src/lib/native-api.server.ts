@@ -1,6 +1,7 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
 import { getSql, dbSource } from "./db";
 import { requestCustomerOtp, verifyCustomerOtp } from "./customer-otp.server";
+import { assignOrderAutomatically } from "./vendor-assignment.server";
 
 type Row = Record<string, unknown>;
 function env(name: string): string | undefined {
@@ -263,6 +264,7 @@ export async function createNativeOrder(request: Request, body: unknown) {
   }
 
   const sql = await getSql();
+  const assignedVendor = await assignOrderAutomatically(sql, address.pincode);
   const catalog = await readNativeCatalog(sql);
   if (milkQuantity > 0 && !catalog.milk.enabled) {
     return { ok: false as const, status: 409, error: "Milk is not available yet. Please refresh the product list." };
@@ -294,14 +296,14 @@ export async function createNativeOrder(request: Request, body: unknown) {
        payment_method, status, partner_shop, partner_name, partner_phone, delivery_otp_encrypted,
        address_label, address_line, city, pincode, latitude, longitude, product_type,
        water_can_quantity, milk_quantity, curd_quantity, milk_unit_price_paise, curd_unit_price_paise,
-       bottle_deposit_paise, empty_bottles_to_return, floor_count, floor_delivery_charge_paise, payment_status)
+       bottle_deposit_paise, empty_bottles_to_return, floor_count, floor_delivery_charge_paise, payment_status, vendor_id)
      values ($1,$2,$3,$4,$5,$6,$7,'cash_on_delivery','placed',$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,
-       'egg',$18,$19,$20,$21,$22,$23,$24,$25,$26,'pending')`,
+       'egg',$18,$19,$20,$21,$22,$23,$24,$25,$26,'pending',$27)`,
     [orderId, customer.id, customer.phone, customer.name, eggQuantity, eggUnitPricePaise, totalPaise,
-      "", "", "", encryptOtp(deliveryOtp), address.label, address.line, address.city, address.pincode,
+      assignedVendor?.id ?? "", assignedVendor?.name ?? "", assignedVendor?.phone ?? "", encryptOtp(deliveryOtp), address.label, address.line, address.city, address.pincode,
       address.latitude, address.longitude, waterCanQuantity, milkQuantity, curdQuantity,
       milkUnitPricePaise, curdUnitPricePaise, bottleDepositPaise, emptyBottlesToReturn,
-      floorCount, floorDeliveryChargePaise],
+      floorCount, floorDeliveryChargePaise, assignedVendor?.id ?? null],
   );
   await sql.query(
     "insert into native_order_events (id, order_id, from_status, to_status, note, actor) values ($1,$2,null,'placed','Order placed by customer','customer')",
@@ -331,8 +333,8 @@ export async function createNativeOrder(request: Request, body: unknown) {
       status: "placed",
       payment: "Cash on delivery",
       paymentStatus: "pending",
-      partnerName: "",
-      partnerPhone: "",
+      partnerName: assignedVendor?.name ?? "",
+      partnerPhone: assignedVendor?.phone ?? "",
       deliveryOtp,
       addressLabel: address.label,
       deliveryAddress: [address.line, address.city, address.pincode].join(", "),
