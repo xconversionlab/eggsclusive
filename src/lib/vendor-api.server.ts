@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { getSql, dbSource } from "./db";
 import { requestPhoneOtp, verifyPhoneOtp, tokenDigest } from "./native-api.server";
+import { normalizeIndianPhone } from "./customer-otp.server";
 
 type Row = Record<string, unknown>;
 type Vendor = {
@@ -56,28 +57,46 @@ async function authenticateVendor(request: Request) {
   return { vendor: mapVendor(row) };
 }
 
-export async function requestVendorOtp(phone: unknown, requester: unknown) {
+export async function requestVendorOtp(phoneInput: unknown, requester: unknown) {
   requirePersistentDatabase();
+  const phone = normalizeIndianPhone(phoneInput);
+  if (!phone) return { ok: false as const, status: 400, error: "Enter a valid 10-digit Indian mobile number." };
+  const sql = await getSql();
+  const rows = await sql.query<Row>("select status from native_vendors where phone=$1 limit 1", [phone]);
+  if (!rows[0]) {
+    return { ok: false as const, status: 403, error: "This mobile number is not registered as a Spencer's vendor." };
+  }
+  if (rows[0].status !== "approved") {
+    return { ok: false as const, status: 403, error: rows[0].status === "pending" ? "Your vendor account is awaiting approval." : "This vendor account is suspended. Contact platform operations." };
+  }
   return requestPhoneOtp(phone, "vendor:" + (typeof requester === "string" ? requester.slice(0, 120) : "native-app"));
 }
-export async function verifyVendorOtp(phone: unknown, code: unknown, name: unknown) {
+
+export async function verifyVendorOtp(phoneInput: unknown, code: unknown, _name: unknown) {
   requirePersistentDatabase();
-  const verified = await verifyPhoneOtp(phone, code, typeof name === "string" && name.trim() ? name : "Vendor");
-  if (!verified.ok) return verified;
+  const phone = normalizeIndianPhone(phoneInput);
+  if (!phone) return { ok: false as const, status: 400, error: "Enter a valid 10-digit Indian mobile number." };
   const sql = await getSql();
   const rows = await sql.query<Row>(
     "select id,name,phone,status,service_pincodes,accepting_orders,opens_at,closes_at from native_vendors where phone=$1 limit 1",
-    [verified.customer.phone],
+    [phone],
   );
   if (!rows[0]) {
-    await sql.query("update native_customer_sessions set revoked_at=now() where token_hash=$1", [tokenDigest(verified.token)]);
-    return { ok: false as const, status: 403, error: "This mobile number is not registered as a vendor. Ask Spencer's platform operations to create your vendor account." };
+    return { ok: false as const, status: 403, error: "This mobile number is not registered as a Spencer's vendor." };
   }
   const vendor = mapVendor(rows[0]);
   if (vendor.status !== "approved") {
-    await sql.query("update native_customer_sessions set revoked_at=now() where token_hash=$1", [tokenDigest(verified.token)]);
     return { ok: false as const, status: 403, error: vendor.status === "pending" ? "Your vendor account is awaiting approval." : "This vendor account is suspended. Contact platform operations." };
   }
+
+  // Preserve an existing customer name when a phone number is shared by a vendor and customer.
+  const existingCustomer = await sql.query<{ name: string }>(
+    "select name from native_customers where phone=$1 limit 1",
+    [phone],
+  );
+  const verified = await verifyPhoneOtp(phone, code, existingCustomer[0]?.name || vendor.name);
+  if (!verified.ok) return verified;
+
   const token = randomBytes(32).toString("base64url");
   await sql.query(
     "insert into native_vendor_sessions(token_hash,vendor_id,expires_at) values($1,$2,now()+interval '30 days')",
