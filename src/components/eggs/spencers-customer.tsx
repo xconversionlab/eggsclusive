@@ -28,10 +28,11 @@ type AppData = {
   partnerRequests: { name: string; phone: string; area: string; note: string }[];
 };
 const STORAGE_KEY = "spencers-enterprises-customer-v1";
+const MIN_EGG_QUANTITY = 10;
 const EMPTY: AppData = {
   profile: { name: "", phone: "", verified: false },
   addresses: [], activeAddressId: null,
-  quantities: { egg: 0, water: 0, milk: 0, curd: 0 },
+  quantities: { egg: MIN_EGG_QUANTITY, water: 0, milk: 0, curd: 0 },
   noEmptyBottles: false, orders: [], walletPaise: 0, walletNotes: [],
   complaints: [], partnerRequests: [],
 };
@@ -60,10 +61,10 @@ function BrandMark({ small = false }: { small?: boolean }) {
   );
 }
 
-function QuantityControl({ value, onChange, unit }: { value: number; onChange: (n: number) => void; unit: string }) {
+function QuantityControl({ value, onChange, unit, min = 0 }: { value: number; onChange: (n: number) => void; unit: string; min?: number }) {
   return (
     <div className="flex items-center gap-1">
-      <button type="button" aria-label={"Decrease " + unit} onClick={() => onChange(Math.max(0, value - 1))} className="grid h-8 w-8 place-items-center rounded-full border border-customer-line bg-white text-brand-dark disabled:opacity-35" disabled={value === 0}>
+      <button type="button" aria-label={"Decrease " + unit} onClick={() => onChange(Math.max(min, value - 1))} className="grid h-8 w-8 place-items-center rounded-full border border-customer-line bg-white text-brand-dark disabled:opacity-35" disabled={value <= min}>
         <Minus size={14} />
       </button>
       <div className="min-w-8 text-center">
@@ -109,12 +110,17 @@ function ProductCard({
           <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-brand-pale">
             <ProductIcon product={product} />
           </div>
-          <QuantityControl value={quantity} onChange={setQuantity} unit={product === "egg" ? "eggs" : product === "water" ? "cans" : "units"} />
+          <QuantityControl value={quantity} onChange={setQuantity} min={product === "egg" ? MIN_EGG_QUANTITY : 0} unit={product === "egg" ? "eggs" : product === "water" ? "cans" : "units"} />
         </div>
         <div className="min-w-0">
           <h3 className="font-semibold text-customer-ink">{PRODUCT_NAMES[product]}</h3>
           {descriptions[product] ? <p className="mt-1 text-xs text-customer-muted">{descriptions[product]}</p> : null}
-          {product === "egg" ? <p className="mt-1 text-sm font-semibold text-brand">₹7 per egg</p> : null}
+          {product === "egg" ? (
+            <>
+              <p className="mt-1 text-sm font-semibold text-brand">₹7 per egg</p>
+              <p className="mt-1 text-xs text-customer-muted">Minimum order: 10 eggs</p>
+            </>
+          ) : null}
           {product === "water" ? <p className="mt-1 text-sm font-semibold text-brand">₹30 per can · ₹150 refundable bottle deposit</p> : null}
         </div>
         <div className="pt-2 text-right">
@@ -127,7 +133,7 @@ function ProductCard({
       {product === "egg" ? (
         <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-customer-line pt-3">
           <span className="mr-1 text-xs text-customer-muted">Quick quantity</span>
-          {[6, 12, 30, 60, 120].map((n) => (
+          {[10, 12, 30, 60, 120].map((n) => (
             <button type="button" key={n} onClick={() => setQuantity(n)} className={"rounded-lg border px-3 py-2 text-xs font-medium " + (quantity === n ? "border-brand bg-brand-pale text-brand-dark" : "border-customer-line text-customer-muted")}>{n}</button>
           ))}
         </div>
@@ -217,7 +223,16 @@ export function SpencersCustomerApp() {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const saved = JSON.parse(raw) as Partial<AppData>;
-        setData({ ...EMPTY, ...saved, profile: { ...EMPTY.profile, ...saved.profile, verified: false }, quantities: { ...EMPTY.quantities, ...saved.quantities } });
+        const savedEggQuantity = Number(saved.quantities?.egg ?? MIN_EGG_QUANTITY);
+        const eggQuantity = Number.isFinite(savedEggQuantity)
+          ? Math.max(MIN_EGG_QUANTITY, Math.min(999, Math.floor(savedEggQuantity)))
+          : MIN_EGG_QUANTITY;
+        setData({
+          ...EMPTY,
+          ...saved,
+          profile: { ...EMPTY.profile, ...saved.profile, verified: false },
+          quantities: { ...EMPTY.quantities, ...saved.quantities, egg: eggQuantity },
+        });
         setNameInput(saved.profile?.name ?? "");
         setPhoneInput(saved.profile?.phone ?? "");
       }
@@ -291,7 +306,12 @@ export function SpencersCustomerApp() {
   const refundTotal = useMemo(() => data.walletPaise, [data.walletPaise]);
 
   const setQuantity = (product: ProductKey, quantity: number) => {
-    setData((current) => ({ ...current, quantities: { ...current.quantities, [product]: Math.max(0, Math.min(999, Math.floor(quantity))) } }));
+    const minimum = product === "egg" ? MIN_EGG_QUANTITY : 0;
+    const normalized = Number.isFinite(quantity) ? Math.floor(quantity) : minimum;
+    setData((current) => ({
+      ...current,
+      quantities: { ...current.quantities, [product]: Math.max(minimum, Math.min(999, normalized)) },
+    }));
   };
   const sendOtp = async () => {
     const digits = phoneInput.replace(/\D/g, "");
@@ -391,6 +411,10 @@ export function SpencersCustomerApp() {
   };
   const placeOrder = () => {
     if (!activeAddress) { setTab("profile"); setAddressEditorOpen(true); setNotice("Add a delivery address before placing an order."); return; }
+    if (data.quantities.egg < MIN_EGG_QUANTITY) {
+      setNotice("Fresh Egg orders require a minimum quantity of 10 eggs.");
+      return;
+    }
     if (selectedCount === 0) { setNotice("Choose a quantity for at least one product."); return; }
     const lines = (Object.keys(data.quantities) as ProductKey[])
       .filter((key) => data.quantities[key] > 0)
@@ -400,7 +424,7 @@ export function SpencersCustomerApp() {
       totalPaise: knownTotal, deliveryOtp: String(Math.floor(100000 + Math.random() * 900000)),
       address: activeAddress, awaitingQuote: hasUnpriced,
     };
-    setData((current) => ({ ...current, orders: [order, ...current.orders], quantities: { egg: 0, water: 0, milk: 0, curd: 0 }, noEmptyBottles: false }));
+    setData((current) => ({ ...current, orders: [order, ...current.orders], quantities: { egg: MIN_EGG_QUANTITY, water: 0, milk: 0, curd: 0 }, noEmptyBottles: false }));
     setTab("activity");
     setNotice(hasUnpriced ? "Order request placed. Spencer's team will confirm milk / curd pricing." : "Your order request has been placed.");
   };
