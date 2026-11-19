@@ -630,9 +630,13 @@ export function SpencersCustomerApp() {
         quantities: { egg: MIN_EGG_QUANTITY, water: 0, milk: 0, curd: 0 },
         noEmptyBottles: false,
       }));
-      await refreshCustomerData();
       setTab("activity");
       setNotice("Order " + result.order.id + " placed. It will now appear in the Vendor App and Super Admin.");
+      try {
+        await refreshCustomerData();
+      } catch {
+        setNotice("Order " + result.order.id + " was placed. Refresh Status to load the latest order details.");
+      }
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "The order could not be placed. Please try again.");
     } finally {
