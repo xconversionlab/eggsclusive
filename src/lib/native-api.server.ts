@@ -82,11 +82,11 @@ export async function authenticateNativeRequest(request: Request): Promise<Nativ
   const digest = tokenDigest(token);
   const sql = await getSql();
   const rows = await sql.query<NativeCustomer>(
-    \`select c.id, c.name, c.phone
+    `select c.id, c.name, c.phone
        from native_customer_sessions s
        join native_customers c on c.id = s.customer_id
       where s.token_hash = $1 and s.revoked_at is null and s.expires_at > now()
-      limit 1\`,
+      limit 1`,
     [digest],
   );
   if (!rows[0]) return null;
