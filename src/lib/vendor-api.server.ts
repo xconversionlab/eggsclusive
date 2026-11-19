@@ -363,3 +363,229 @@ export async function assignOrderAutomatically(sql: Awaited<ReturnType<typeof ge
   );
   return rows[0] ? { id: String(rows[0].id), name: String(rows[0].name), phone: String(rows[0].phone) } : null;
 }
+
+
+export async function getSuperAdminDashboard(request: Request) {
+  requirePersistentDatabase();
+  if (!isSuperAdminRequest(request)) return { ok: false as const, status: 401, error: "Super Admin authorization failed." };
+  const sql = await getSql();
+  const [orders, vendors, customers, complaints] = await Promise.all([
+    sql.query<Row>(
+      "select count(*)::int as total, " +
+      "count(*) filter (where status in ('placed','accepted','preparing','out_for_delivery'))::int as open, " +
+      "count(*) filter (where status='delivered')::int as delivered, " +
+      "coalesce(sum(total_paise) filter (where status='delivered'),0)::bigint as delivered_value, " +
+      "count(*) filter (where created_at >= date_trunc('day', now()))::int as today " +
+      "from native_orders",
+    ),
+    sql.query<Row>(
+      "select count(*)::int as total, " +
+      "count(*) filter (where status='pending')::int as pending, " +
+      "count(*) filter (where status='approved')::int as approved, " +
+      "count(*) filter (where status='suspended')::int as suspended " +
+      "from native_vendors",
+    ),
+    sql.query<Row>("select count(*)::int as total from native_customers"),
+    sql.query<Row>(
+      "select count(*) filter (where status in ('open','in_progress'))::int as open " +
+      "from native_complaints",
+    ),
+  ]);
+  const o = orders[0] ?? {};
+  const v = vendors[0] ?? {};
+  return {
+    ok: true as const,
+    stats: {
+      orders: {
+        total: Number(o.total ?? 0), open: Number(o.open ?? 0), delivered: Number(o.delivered ?? 0),
+        deliveredValuePaise: Number(o.delivered_value ?? 0), today: Number(o.today ?? 0),
+      },
+      vendors: {
+        total: Number(v.total ?? 0), pending: Number(v.pending ?? 0),
+        approved: Number(v.approved ?? 0), suspended: Number(v.suspended ?? 0),
+      },
+      customers: Number(customers[0]?.total ?? 0),
+      openComplaints: Number(complaints[0]?.open ?? 0),
+    },
+  };
+}
+
+export async function listSuperAdminOrders(request: Request) {
+  requirePersistentDatabase();
+  if (!isSuperAdminRequest(request)) return { ok: false as const, status: 401, error: "Super Admin authorization failed." };
+  const sql = await getSql();
+  const rows = await sql.query<Row>(
+    "select o.id,o.customer_name,o.customer_phone,o.quantity,o.unit_price_paise,o.water_can_quantity," +
+    "o.milk_quantity,o.curd_quantity,o.milk_unit_price_paise,o.curd_unit_price_paise,o.bottle_deposit_paise," +
+    "o.total_paise,o.payment_method,o.payment_status,o.status,o.partner_shop,o.partner_name,o.partner_phone," +
+    "o.address_label,o.address_line,o.city,o.pincode,o.created_at,o.status_changed_at,o.vendor_id," +
+    "v.name as assigned_vendor_name " +
+    "from native_orders o left join native_vendors v on v.id=o.vendor_id " +
+    "order by o.created_at desc limit 300",
+  );
+  return {
+    ok: true as const,
+    orders: rows.map((row) => ({
+      id: String(row.id), customerName: String(row.customer_name), phone: String(row.customer_phone),
+      eggQuantity: Number(row.quantity ?? 0), eggUnitPricePaise: Number(row.unit_price_paise ?? 0),
+      waterCanQuantity: Number(row.water_can_quantity ?? 0), milkQuantity: Number(row.milk_quantity ?? 0),
+      curdQuantity: Number(row.curd_quantity ?? 0), milkUnitPricePaise: Number(row.milk_unit_price_paise ?? 0),
+      curdUnitPricePaise: Number(row.curd_unit_price_paise ?? 0), bottleDepositPaise: Number(row.bottle_deposit_paise ?? 0),
+      totalPaise: Number(row.total_paise ?? 0), paymentMethod: String(row.payment_method ?? ""),
+      paymentStatus: String(row.payment_status ?? "pending"), status: String(row.status ?? ""),
+      partnerShop: String(row.partner_shop ?? ""), partnerName: String(row.partner_name ?? ""),
+      partnerPhone: String(row.partner_phone ?? ""), addressLabel: String(row.address_label ?? "Home"),
+      deliveryAddress: [row.address_line, row.city, row.pincode].filter(Boolean).map(String).join(", "),
+      createdAt: new Date(String(row.created_at)).getTime(),
+      statusChangedAt: new Date(String(row.status_changed_at)).getTime(),
+      vendorId: row.vendor_id ? String(row.vendor_id) : null,
+      vendorName: row.assigned_vendor_name ? String(row.assigned_vendor_name) : "",
+    })),
+  };
+}
+
+export async function listSuperAdminComplaints(request: Request) {
+  requirePersistentDatabase();
+  if (!isSuperAdminRequest(request)) return { ok: false as const, status: 401, error: "Super Admin authorization failed." };
+  const sql = await getSql();
+  const rows = await sql.query<Row>(
+    "select id,customer_name,customer_phone,message,status,created_at,updated_at " +
+    "from native_complaints order by created_at desc limit 250",
+  );
+  return {
+    ok: true as const,
+    complaints: rows.map((row) => ({
+      id: String(row.id), customerName: String(row.customer_name), phone: String(row.customer_phone),
+      message: String(row.message), status: String(row.status),
+      createdAt: new Date(String(row.created_at)).getTime(),
+      updatedAt: new Date(String(row.updated_at)).getTime(),
+    })),
+  };
+}
+
+export async function updateSuperAdminComplaintStatus(request: Request, complaintId: string, body: unknown) {
+  requirePersistentDatabase();
+  if (!isSuperAdminRequest(request)) return { ok: false as const, status: 401, error: "Super Admin authorization failed." };
+  const status = body && typeof body === "object" && !Array.isArray(body)
+    ? (body as Record<string, unknown>).status : null;
+  if (!["open", "in_progress", "resolved", "closed"].includes(String(status))) {
+    return { ok: false as const, status: 400, error: "Unsupported support ticket status." };
+  }
+  const sql = await getSql();
+  const rows = await sql.query<Row>(
+    "update native_complaints set status=$2,updated_at=now() where id=$1 " +
+    "returning id,customer_name,customer_phone,message,status,created_at,updated_at",
+    [complaintId, status],
+  );
+  if (!rows[0]) return { ok: false as const, status: 404, error: "Support ticket not found." };
+  const row = rows[0];
+  return {
+    ok: true as const,
+    complaint: {
+      id: String(row.id), customerName: String(row.customer_name), phone: String(row.customer_phone),
+      message: String(row.message), status: String(row.status),
+      createdAt: new Date(String(row.created_at)).getTime(),
+      updatedAt: new Date(String(row.updated_at)).getTime(),
+    },
+  };
+}
+
+export async function listSuperAdminInventory(request: Request) {
+  requirePersistentDatabase();
+  if (!isSuperAdminRequest(request)) return { ok: false as const, status: 401, error: "Super Admin authorization failed." };
+  const sql = await getSql();
+  const rows = await sql.query<Row>(
+    "select i.vendor_id,v.name as vendor_name,v.status as vendor_status,i.product_key," +
+    "i.stock_units,i.low_stock_at,i.available,i.updated_at " +
+    "from native_vendor_inventory i join native_vendors v on v.id=i.vendor_id " +
+    "order by v.name asc,i.product_key asc",
+  );
+  return {
+    ok: true as const,
+    inventory: rows.map((row) => ({
+      vendorId: String(row.vendor_id), vendorName: String(row.vendor_name),
+      vendorStatus: String(row.vendor_status), productKey: String(row.product_key),
+      stockUnits: Number(row.stock_units), lowStockAt: Number(row.low_stock_at),
+      available: Boolean(row.available), updatedAt: new Date(String(row.updated_at)).getTime(),
+    })),
+  };
+}
+
+export async function updateSuperAdminInventory(request: Request, vendorId: string, productKey: string, body: unknown) {
+  requirePersistentDatabase();
+  if (!isSuperAdminRequest(request)) return { ok: false as const, status: 401, error: "Super Admin authorization failed." };
+  if (!["egg", "water", "milk", "curd"].includes(productKey)) {
+    return { ok: false as const, status: 400, error: "Unsupported inventory product." };
+  }
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return { ok: false as const, status: 400, error: "Invalid inventory update." };
+  }
+  const value = body as Record<string, unknown>;
+  const stock = Number(value.stockUnits);
+  const low = Number(value.lowStockAt);
+  if (!Number.isInteger(stock) || stock < 0 || stock > 100000 ||
+      !Number.isInteger(low) || low < 0 || low > 100000 || typeof value.available !== "boolean") {
+    return { ok: false as const, status: 400, error: "Enter valid stock, low-stock threshold and availability." };
+  }
+  const sql = await getSql();
+  const vendor = await sql.query<Row>("select id from native_vendors where id=$1 limit 1", [vendorId]);
+  if (!vendor[0]) return { ok: false as const, status: 404, error: "Vendor not found." };
+  await sql.query(
+    "insert into native_vendor_inventory(vendor_id,product_key,stock_units,low_stock_at,available,updated_at) " +
+    "values($1,$2,$3,$4,$5,now()) on conflict(vendor_id,product_key) do update set " +
+    "stock_units=excluded.stock_units,low_stock_at=excluded.low_stock_at,available=excluded.available,updated_at=now()",
+    [vendorId, productKey, stock, low, value.available],
+  );
+  return { ok: true as const, vendorId, productKey, stockUnits: stock, lowStockAt: low, available: value.available };
+}
+
+export async function getSuperAdminCatalog(request: Request) {
+  requirePersistentDatabase();
+  if (!isSuperAdminRequest(request)) return { ok: false as const, status: 401, error: "Super Admin authorization failed." };
+  const sql = await getSql();
+  const rows = await sql.query<Row>(
+    "select product_key,unit_price_paise,pack_label,enabled,updated_at from native_product_catalog order by product_key",
+  );
+  return {
+    ok: true as const,
+    catalog: rows.map((row) => ({
+      productKey: String(row.product_key), unitPricePaise: Number(row.unit_price_paise),
+      packLabel: String(row.pack_label), enabled: Boolean(row.enabled),
+      updatedAt: new Date(String(row.updated_at)).getTime(),
+    })),
+  };
+}
+
+export async function updateSuperAdminCatalog(request: Request, body: unknown) {
+  requirePersistentDatabase();
+  if (!isSuperAdminRequest(request)) return { ok: false as const, status: 401, error: "Super Admin authorization failed." };
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return { ok: false as const, status: 400, error: "Invalid catalogue update." };
+  }
+  const value = body as Record<string, unknown>;
+  const updates: Array<{ key: "milk" | "curd"; price: number; label: string; enabled: boolean }> = [];
+  for (const key of ["milk", "curd"] as const) {
+    const item = value[key];
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      return { ok: false as const, status: 400, error: "Supply both Milk and Curd settings." };
+    }
+    const product = item as Record<string, unknown>;
+    const price = Number(product.unitPricePaise);
+    const label = typeof product.packLabel === "string" ? product.packLabel.trim().slice(0, 60) : "";
+    if (!Number.isInteger(price) || price < 0 || price > 100000000 ||
+        typeof product.enabled !== "boolean" || (product.enabled && (price <= 0 || !label))) {
+      return { ok: false as const, status: 400, error: "Enter a valid price and pack label for each enabled product." };
+    }
+    updates.push({ key, price, label, enabled: product.enabled });
+  }
+  const sql = await getSql();
+  for (const item of updates) {
+    await sql.query(
+      "insert into native_product_catalog(product_key,unit_price_paise,pack_label,enabled,updated_at) " +
+      "values($1,$2,$3,$4,now()) on conflict(product_key) do update set " +
+      "unit_price_paise=excluded.unit_price_paise,pack_label=excluded.pack_label,enabled=excluded.enabled,updated_at=now()",
+      [item.key, item.price, item.label, item.enabled],
+    );
+  }
+  return await getSuperAdminCatalog(request);
+}
