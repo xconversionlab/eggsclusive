@@ -547,43 +547,118 @@ export function SpencersCustomerApp() {
     }
   };
 
-  const saveAddress = () => {
+  const saveAddress = async () => {
     if (data.addresses.length >= 4) { setNotice("You can save up to 4 addresses."); return; }
-    if (!addressForm.label.trim() || !addressForm.recipient.trim() || !addressForm.line1.trim() || !addressForm.city.trim() || !/^\d{6}$/.test(addressForm.pincode)) {
+    if (!addressForm.label.trim() || !addressForm.recipient.trim() || !addressForm.line1.trim() || !addressForm.city.trim() || !/^\\d{6}$/.test(addressForm.pincode)) {
       setNotice("Enter the address name, recipient, address, city and valid 6-digit pincode."); return;
     }
     const address: Address = { ...addressForm, id: newId("ADDR") };
-    setData((current) => ({ ...current, addresses: [...current.addresses, address], activeAddressId: address.id }));
+    const nextAddresses = [...data.addresses, address];
+    setData((current) => ({ ...current, addresses: nextAddresses, activeAddressId: address.id }));
+    try {
+      await syncAddresses(nextAddresses, address.id);
+      setNotice("Delivery address saved and synced to your account.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Address saved on this device but server sync failed.");
+    }
     setAddressForm({ label: "", recipient: data.profile.name, line1: "", line2: "", city: "Chennai", pincode: "", landmark: "" });
     setAddressEditorOpen(false);
-    setNotice("Delivery address saved.");
   };
-  const placeOrder = () => {
+
+  const selectAddress = async (addressId: string) => {
+    setData((current) => ({ ...current, activeAddressId: addressId }));
+    try {
+      await syncAddresses(data.addresses, addressId);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not sync the selected address.");
+    }
+  };
+
+  const removeAddress = async (addressId: string) => {
+    const nextAddresses = data.addresses.filter((address) => address.id !== addressId);
+    const nextActive = data.activeAddressId === addressId ? (nextAddresses[0]?.id ?? null) : data.activeAddressId;
+    setData((current) => ({ ...current, addresses: nextAddresses, activeAddressId: nextActive }));
+    try {
+      await syncAddresses(nextAddresses, nextActive);
+      setNotice("Address removed from your account.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not sync the address change.");
+    }
+  };
+
+  const placeOrder = async () => {
     if (!activeAddress) { setTab("profile"); setAddressEditorOpen(true); setNotice("Add a delivery address before placing an order."); return; }
     if (data.quantities.egg < MIN_EGG_QUANTITY) {
       setNotice("Fresh Egg orders require a minimum quantity of 10 eggs.");
       return;
     }
     if (selectedCount === 0) { setNotice("Choose a quantity for at least one product."); return; }
-    const lines = (Object.keys(data.quantities) as ProductKey[])
-      .filter((key) => data.quantities[key] > 0)
-      .map((key) => ({ product: key, name: PRODUCT_NAMES[key], quantity: data.quantities[key] }));
-    const order: CustomerOrder = {
-      id: newId("SE"), createdAt: new Date().toISOString(), status: "placed", lines,
-      totalPaise: knownTotal, deliveryOtp: String(Math.floor(100000 + Math.random() * 900000)),
-      address: activeAddress, awaitingQuote: hasUnpriced,
-    };
-    setData((current) => ({ ...current, orders: [order, ...current.orders], quantities: { egg: MIN_EGG_QUANTITY, water: 0, milk: 0, curd: 0 }, noEmptyBottles: false }));
-    setTab("activity");
-    setNotice(hasUnpriced ? "Order request placed. Spencer's team will confirm milk / curd pricing." : "Your order request has been placed.");
+    if (hasUnpriced) { setNotice("Milk or curd is not enabled yet. Remove it until its catalogue price is configured."); return; }
+
+    setPlacingOrder(true);
+    setNotice("");
+    try {
+      const response = await fetch("/api/native/orders", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          eggQuantity: data.quantities.egg,
+          waterCanQuantity: data.quantities.water,
+          milkQuantity: data.quantities.milk,
+          curdQuantity: data.quantities.curd,
+          emptyBottlesToReturn: !data.noEmptyBottles,
+          floorCount: 0,
+          address: {
+            label: activeAddress.label,
+            door: activeAddress.line1,
+            street: activeAddress.line2 || activeAddress.line1,
+            area: activeAddress.line2 || activeAddress.line1,
+            landmark: activeAddress.landmark,
+            city: activeAddress.city,
+            pincode: activeAddress.pincode,
+          },
+        }),
+      });
+      const result = await response.json() as {
+        ok?: boolean; error?: string;
+        order?: { id: string; totalPaise: number; status: string };
+      };
+      if (!response.ok || !result.ok || !result.order) throw new Error(result.error || "The order could not be placed.");
+      setData((current) => ({
+        ...current,
+        quantities: { egg: MIN_EGG_QUANTITY, water: 0, milk: 0, curd: 0 },
+        noEmptyBottles: false,
+      }));
+      await refreshCustomerData();
+      setTab("activity");
+      setNotice("Order " + result.order.id + " placed. It will now appear in the Vendor App and Super Admin.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "The order could not be placed. Please try again.");
+    } finally {
+      setPlacingOrder(false);
+    }
   };
-  const submitComplaint = () => {
+
+  const submitComplaint = async () => {
     const note = complaintText.trim();
     if (note.length < 8) { setNotice("Please describe the issue in a little more detail."); return; }
-    const item: Complaint = { id: newId("SE-C"), message: note, createdAt: new Date().toISOString() };
-    setData((current) => ({ ...current, complaints: [item, ...current.complaints] }));
-    setComplaintText("");
-    setNotice("Complaint saved as " + item.id + ". You can share it with Spencer's support on WhatsApp.");
+    try {
+      const response = await fetch("/api/native/complaints", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: note }),
+      });
+      const result = await response.json() as { ok?: boolean; error?: string; ticketId?: string };
+      if (!response.ok || !result.ok || !result.ticketId) throw new Error(result.error || "Your support ticket could not be submitted.");
+      const item: Complaint = { id: result.ticketId, message: note, createdAt: new Date().toISOString() };
+      setData((current) => ({ ...current, complaints: [item, ...current.complaints] }));
+      setComplaintText("");
+      setNotice("Support ticket " + item.id + " was sent to the Spencer's support desk.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Your support ticket could not be submitted.");
+    }
   };
   const submitPartner = () => {
     if (!partnerForm.name.trim() || partnerForm.phone.replace(/\D/g, "").length !== 10 || !partnerForm.area.trim()) {
