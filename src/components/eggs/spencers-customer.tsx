@@ -784,18 +784,18 @@ export function SpencersCustomerApp() {
             <section className="rounded-2xl border border-customer-line bg-white p-4">
               <h3 className="font-semibold">Order summary</h3>
               <div className="mt-3 space-y-3 text-sm">
-                {data.quantities.egg > 0 ? <PriceRow label="Fresh Egg" detail={"₹7 × " + data.quantities.egg + " eggs"} value={data.quantities.egg * PRICE.egg} /> : null}
-                {data.quantities.water > 0 ? <PriceRow label="Water Can" detail={"₹30 × " + data.quantities.water + " cans"} value={data.quantities.water * PRICE.water} /> : null}
+                {data.quantities.egg > 0 ? <PriceRow label="Fresh Egg" detail={money(catalog.egg.unitPricePaise) + " × " + data.quantities.egg + " eggs"} value={data.quantities.egg * catalog.egg.unitPricePaise} /> : null}
+                {data.quantities.water > 0 ? <PriceRow label="Water Can" detail={money(catalog.water.unitPricePaise) + " × " + data.quantities.water + " cans"} value={data.quantities.water * catalog.water.unitPricePaise} /> : null}
                 {waterDeposit > 0 ? <PriceRow label="Bottle deposit" detail={"₹150 × " + data.quantities.water + " bottles"} value={waterDeposit} /> : null}
-                {data.quantities.milk > 0 ? <PriceRow label="Milk" detail={data.quantities.milk + " units · price to be confirmed"} value={0} /> : null}
-                {data.quantities.curd > 0 ? <PriceRow label="Curd" detail={data.quantities.curd + " units · price to be confirmed"} value={0} /> : null}
+                {data.quantities.milk > 0 ? <PriceRow label="Milk" detail={catalog.milk.enabled ? data.quantities.milk + " × " + catalog.milk.packLabel : "Currently unavailable"} value={data.quantities.milk * catalog.milk.unitPricePaise} /> : null}
+                {data.quantities.curd > 0 ? <PriceRow label="Curd" detail={catalog.curd.enabled ? data.quantities.curd + " × " + catalog.curd.packLabel : "Currently unavailable"} value={data.quantities.curd * catalog.curd.unitPricePaise} /> : null}
                 {selectedCount === 0 ? <p className="text-xs text-customer-muted">Your selected products and total will appear here.</p> : null}
                 <div className="border-t border-customer-line pt-3"><PriceRow label="Total" detail={hasUnpriced ? "Excludes items awaiting price confirmation" : "Order total"} value={knownTotal} /></div>
               </div>
-              <button type="button" onClick={placeOrder} disabled={selectedCount === 0} className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-brand px-4 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">
-                {hasUnpriced ? "Submit order request" : "Place order"} <ArrowRight size={17} />
+              <button type="button" onClick={() => void placeOrder()} disabled={selectedCount === 0 || placingOrder || hasUnpriced} className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-brand px-4 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">
+                {placingOrder ? "Placing order…" : "Place order"} <ArrowRight size={17} />
               </button>
-              {hasUnpriced ? <p className="mt-2 text-center text-[11px] text-customer-muted">Milk / curd prices will be confirmed by the Spencer's team before payment.</p> : null}
+              {hasUnpriced ? <p className="mt-2 text-center text-[11px] text-customer-muted">Milk / curd are unavailable until their prices are configured by Spencer's team.</p> : null}
             </section>
             <p className="px-2 text-center text-[11px] text-customer-muted">No delivery slot, nearest-partner or cash-on-delivery selection is required in this customer flow.</p>
           </>
@@ -854,15 +854,15 @@ export function SpencersCustomerApp() {
               <div className="flex items-center justify-between"><div><h3 className="font-semibold">Saved addresses</h3><p className="mt-1 text-xs text-customer-muted">Save up to 4 places</p></div><span className="text-xs text-customer-muted">{data.addresses.length}/4</span></div>
               <div className="mt-3 space-y-2">
                 {data.addresses.map((address) => <div key={address.id} className={"rounded-xl border p-3 " + (activeAddress.id === address.id ? "border-brand bg-brand-pale" : "border-customer-line")}>
-                  <button type="button" onClick={() => setData((s) => ({ ...s, activeAddressId: address.id }))} className="flex w-full items-start gap-2 text-left"><MapPin size={17} className="mt-0.5 shrink-0 text-brand" /><span className="min-w-0 flex-1"><strong className="block text-sm">{address.label}</strong><span className="text-xs text-customer-muted">{address.recipient} · {address.line1}, {address.city} – {address.pincode}</span></span>{activeAddress.id === address.id ? <Check size={17} className="text-brand" /> : null}</button>
-                  <button type="button" onClick={() => setData((s) => ({ ...s, addresses: s.addresses.filter((a) => a.id !== address.id), activeAddressId: s.activeAddressId === address.id ? (s.addresses.find((a) => a.id !== address.id)?.id ?? null) : s.activeAddressId }))} className="ml-6 mt-2 text-xs font-medium text-red-700">Remove address</button>
+                  <button type="button" onClick={() => void selectAddress(address.id)} className="flex w-full items-start gap-2 text-left"><MapPin size={17} className="mt-0.5 shrink-0 text-brand" /><span className="min-w-0 flex-1"><strong className="block text-sm">{address.label}</strong><span className="text-xs text-customer-muted">{address.recipient} · {address.line1}, {address.city} – {address.pincode}</span></span>{activeAddress.id === address.id ? <Check size={17} className="text-brand" /> : null}</button>
+                  <button type="button" onClick={() => void removeAddress(address.id)} className="ml-6 mt-2 text-xs font-medium text-red-700">Remove address</button>
                 </div>)}
               </div>
               {data.addresses.length < 4 ? <button type="button" onClick={() => { setAddressForm({ label: "", recipient: data.profile.name, line1: "", line2: "", city: "Chennai", pincode: "", landmark: "" }); setAddressEditorOpen(true); }} className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-brand text-sm font-semibold text-brand"><Plus size={16} />Add another address</button> : null}
             </div>
             {addressEditorOpen ? <AddressForm form={addressForm} setForm={setAddressForm} onSave={saveAddress} onCancel={() => setAddressEditorOpen(false)} /> : null}
             <div className="rounded-2xl border border-customer-line bg-white p-4">
-              <h3 className="font-semibold">Complaint / Support</h3><p className="mt-1 text-xs text-customer-muted">Describe your issue. A ticket is saved on this device; share it with support while dashboard routing is being connected.</p>
+              <h3 className="font-semibold">Complaint / Support</h3><p className="mt-1 text-xs text-customer-muted">Describe your issue. Tickets are sent directly to the shared Super Admin support queue.</p>
               <textarea value={complaintText} onChange={(e) => setComplaintText(e.target.value)} rows={4} placeholder="Write your complaint here..." className="mt-3 w-full rounded-xl border border-customer-line p-3 text-sm outline-none focus:border-brand" />
               <button type="button" onClick={submitComplaint} className="mt-2 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-brand px-4 text-sm font-semibold text-white"><MessageCircle size={16} />Submit complaint</button>
               {data.complaints.map((item) => <div key={item.id} className="mt-3 rounded-xl bg-customer p-3"><p className="text-xs font-semibold text-brand-dark">{item.id} · {dateLabel(item.createdAt)}</p><p className="mt-1 text-sm">{item.message}</p><a className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-brand underline" target="_blank" rel="noreferrer" href={"https://wa.me/?text=" + encodeURIComponent("Spencer's Enterprises support request " + item.id + ": " + item.message)}>Share via WhatsApp <ArrowRight size={13} /></a></div>)}
