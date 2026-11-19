@@ -294,6 +294,95 @@ export function SpencersCustomerApp() {
     setHydrated(true);
   }, []);
 
+  async function syncAddresses(addresses: Address[], activeAddressId: string | null) {
+    const payload = addresses.map((address) => ({
+      id: address.id,
+      label: address.label,
+      door: address.line1,
+      street: address.line2 || address.line1,
+      area: address.line2 || address.line1,
+      landmark: address.landmark,
+      city: address.city,
+      pincode: address.pincode,
+      isDefault: address.id === activeAddressId,
+    }));
+    const response = await fetch("/api/native/addresses", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ addresses: payload }),
+    });
+    const result = await response.json() as { ok?: boolean; error?: string };
+    if (!response.ok || !result.ok) throw new Error(result.error || "Could not sync saved addresses.");
+  }
+
+  async function refreshCustomerData() {
+    const [ordersResponse, walletResponse, addressesResponse, catalogResponse] = await Promise.all([
+      fetch("/api/native/orders", { credentials: "same-origin", cache: "no-store" }),
+      fetch("/api/native/wallet", { credentials: "same-origin", cache: "no-store" }),
+      fetch("/api/native/addresses", { credentials: "same-origin", cache: "no-store" }),
+      fetch("/api/native/catalog", { credentials: "same-origin", cache: "no-store" }),
+    ]);
+    const [ordersResult, walletResult, addressesResult, catalogResult] = await Promise.all([
+      ordersResponse.json(),
+      walletResponse.json(),
+      addressesResponse.json(),
+      catalogResponse.json(),
+    ]) as [
+      { ok?: boolean; error?: string; orders?: RemoteOrder[] },
+      { ok?: boolean; error?: string; balancePaise?: number; transactions?: Array<{ id: string; description: string; amountPaise: number; createdAt: number }> },
+      { ok?: boolean; error?: string; addresses?: Array<Record<string, unknown>> },
+      { ok?: boolean; error?: string; catalog?: NativeCatalog }
+    ];
+    const failed = [
+      [ordersResponse, ordersResult],
+      [walletResponse, walletResult],
+      [addressesResponse, addressesResult],
+      [catalogResponse, catalogResult],
+    ].find(([response, result]) => !(response as Response).ok || !(result as { ok?: boolean }).ok);
+    if (failed) {
+      const result = failed[1] as { error?: string };
+      throw new Error(result.error || "Could not refresh your account from the shared platform.");
+    }
+
+    let remoteAddresses = addressesResult.addresses ?? [];
+    // Migrate addresses saved by the older browser-only version on first sync.
+    if (remoteAddresses.length === 0 && data.addresses.length > 0) {
+      await syncAddresses(data.addresses, data.activeAddressId);
+      const refreshed = await fetch("/api/native/addresses", { credentials: "same-origin", cache: "no-store" });
+      const refreshedData = await refreshed.json() as { ok?: boolean; addresses?: Array<Record<string, unknown>>; error?: string };
+      if (!refreshed.ok || !refreshedData.ok) throw new Error(refreshedData.error || "Could not load synced addresses.");
+      remoteAddresses = refreshedData.addresses ?? [];
+    }
+
+    const addresses: Address[] = remoteAddresses.map((item) => ({
+      id: String(item.id),
+      label: String(item.label ?? "Home"),
+      recipient: data.profile.name,
+      line1: [item.door, item.street].filter((part) => typeof part === "string" && part.trim()).join(", "),
+      line2: String(item.area ?? ""),
+      city: String(item.city ?? ""),
+      pincode: String(item.pincode ?? ""),
+      landmark: String(item.landmark ?? ""),
+    }));
+    const defaultRemote = remoteAddresses.find((item) => item.is_default === true);
+    const activeAddressId = addresses.some((address) => address.id === data.activeAddressId)
+      ? data.activeAddressId
+      : defaultRemote ? String(defaultRemote.id) : addresses[0]?.id ?? null;
+    const walletNotes = (walletResult.transactions ?? []).map((item) =>
+      dateLabel(new Date(item.createdAt).toISOString()) + " · " + item.description + " · " + money(item.amountPaise),
+    );
+    setData((current) => ({
+      ...current,
+      orders: (ordersResult.orders ?? []).map((order) => fromRemoteOrder(order, current.profile.name)),
+      addresses: addresses.length > 0 ? addresses : current.addresses,
+      activeAddressId: addresses.length > 0 ? activeAddressId : current.activeAddressId,
+      walletPaise: Number(walletResult.balancePaise ?? 0),
+      walletNotes,
+    }));
+    if (catalogResult.catalog) setCatalog(catalogResult.catalog);
+  }
+
   useEffect(() => {
     if (!hydrated) return;
     let active = true;
@@ -317,6 +406,9 @@ export function SpencersCustomerApp() {
           }));
           setNameInput(result.customer.name);
           setPhoneInput(nationalPhone);
+          void refreshCustomerData().catch((error) => {
+            setNotice(error instanceof Error ? error.message : "Could not sync your account.");
+          });
         } else {
           setData((current) => ({
             ...current,
@@ -422,6 +514,9 @@ export function SpencersCustomerApp() {
       setOtpSent(false);
       setOtpInput("");
       setLoginError("");
+      void refreshCustomerData().catch((error) => {
+        setNotice(error instanceof Error ? error.message : "Could not sync your account.");
+      });
     } catch (error) {
       setLoginError(error instanceof Error ? error.message : "We couldn't verify that code. Please try again.");
     } finally {
