@@ -7,6 +7,7 @@ import {
   verifyPhoneOtp,
 } from "@/lib/customer-auth.server";
 import { dbSource } from "@/lib/db";
+import { isCustomerAuthConfigured } from "@/lib/customer-otp.server";
 
 export const Route = createFileRoute("/api/customer-auth/$")({
   server: {
@@ -22,11 +23,7 @@ export const Route = createFileRoute("/api/customer-auth/$")({
             return apiJson({
               ok: true,
               databaseReady: dbSource === "neon",
-              smsConfigured: Boolean(
-                process.env.TWOFACTOR_API_KEY &&
-                process.env.TWOFACTOR_OTP_TEMPLATE_NAME &&
-                process.env.NATIVE_AUTH_SECRET,
-              ),
+              smsConfigured: isCustomerAuthConfigured(),
             });
           }
           return apiJson({ ok: false, error: "Not found." }, 404);
