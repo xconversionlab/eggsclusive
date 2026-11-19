@@ -13,6 +13,15 @@ type Address = {
   city: string; pincode: string; landmark: string;
 };
 type OrderLine = { product: ProductKey; name: string; quantity: number };
+type CatalogItem = { unitPricePaise: number; packLabel: string; enabled: boolean };
+type NativeCatalog = Record<ProductKey, CatalogItem>;
+type RemoteOrder = {
+  id: string; createdAt: number; quantity: number; totalPaise: number; status: string;
+  eggQuantity?: number; waterCanQuantity?: number; milkQuantity?: number; curdQuantity?: number;
+  partnerName?: string; partnerPhone?: string; deliveryOtp?: string;
+  addressLabel?: string; deliveryAddress?: string;
+  address?: { label?: string; line1?: string; city?: string; pincode?: string };
+};
 type CustomerOrder = {
   id: string; createdAt: string; status: OrderStatus; lines: OrderLine[];
   totalPaise: number; deliveryOtp: string; address: Address; awaitingQuote: boolean;
@@ -40,6 +49,45 @@ const PRICE = { egg: 700, water: 3000, bottle: 15000 };
 const PRODUCT_NAMES: Record<ProductKey, string> = {
   egg: "Fresh Egg", water: "Water Can", milk: "Milk", curd: "Curd",
 };
+const DEFAULT_CATALOG: NativeCatalog = {
+  egg: { unitPricePaise: PRICE.egg, packLabel: "per egg", enabled: true },
+  water: { unitPricePaise: PRICE.water, packLabel: "20-litre can", enabled: true },
+  milk: { unitPricePaise: 0, packLabel: "", enabled: false },
+  curd: { unitPricePaise: 0, packLabel: "", enabled: false },
+};
+
+function fromRemoteOrder(order: RemoteOrder, customerName: string): CustomerOrder {
+  const quantities: Record<ProductKey, number> = {
+    egg: Number(order.eggQuantity ?? order.quantity ?? 0),
+    water: Number(order.waterCanQuantity ?? 0),
+    milk: Number(order.milkQuantity ?? 0),
+    curd: Number(order.curdQuantity ?? 0),
+  };
+  const lines = (Object.keys(quantities) as ProductKey[])
+    .filter((key) => quantities[key] > 0)
+    .map((key) => ({ product: key, name: PRODUCT_NAMES[key], quantity: quantities[key] }));
+  return {
+    id: order.id,
+    createdAt: new Date(order.createdAt).toISOString(),
+    status: order.status as OrderStatus,
+    lines,
+    totalPaise: Number(order.totalPaise ?? 0),
+    deliveryOtp: order.deliveryOtp ?? "",
+    address: {
+      id: "REMOTE-" + order.id,
+      label: order.address?.label ?? order.addressLabel ?? "Home",
+      recipient: customerName,
+      line1: order.address?.line1 ?? order.deliveryAddress ?? "",
+      line2: "",
+      city: order.address?.city ?? "Chennai",
+      pincode: order.address?.pincode ?? "",
+      landmark: "",
+    },
+    awaitingQuote: false,
+    partnerName: order.partnerName ?? "",
+    partnerPhone: order.partnerPhone ?? "",
+  };
+}
 const STATUS: Record<OrderStatus, string> = {
   placed: "Order placed", accepted: "Order accepted", preparing: "Preparing your order",
   out_for_delivery: "Out for delivery", delivered: "Order delivered", cancelled: "Order cancelled",
@@ -61,17 +109,17 @@ function BrandMark({ small = false }: { small?: boolean }) {
   );
 }
 
-function QuantityControl({ value, onChange, unit, min = 0 }: { value: number; onChange: (n: number) => void; unit: string; min?: number }) {
+function QuantityControl({ value, onChange, unit, min = 0, disabled = false }: { value: number; onChange: (n: number) => void; unit: string; min?: number; disabled?: boolean }) {
   return (
     <div className="flex items-center gap-1">
-      <button type="button" aria-label={"Decrease " + unit} onClick={() => onChange(Math.max(min, value - 1))} className="grid h-8 w-8 place-items-center rounded-full border border-customer-line bg-white text-brand-dark disabled:opacity-35" disabled={value <= min}>
+      <button type="button" aria-label={"Decrease " + unit} onClick={() => onChange(Math.max(min, value - 1))} className="grid h-8 w-8 place-items-center rounded-full border border-customer-line bg-white text-brand-dark disabled:opacity-35" disabled={disabled || value <= min}>
         <Minus size={14} />
       </button>
       <div className="min-w-8 text-center">
         <div className="text-base font-semibold tabular-nums text-customer-ink">{value}</div>
         <div className="text-[10px] text-customer-muted">{unit}</div>
       </div>
-      <button type="button" aria-label={"Increase " + unit} onClick={() => onChange(value + 1)} className="grid h-8 w-8 place-items-center rounded-full bg-brand-dark text-white">
+      <button type="button" aria-label={"Increase " + unit} onClick={() => onChange(value + 1)} className="grid h-8 w-8 place-items-center rounded-full bg-brand-dark text-white disabled:opacity-35" disabled={disabled}>
         <Plus size={14} />
       </button>
     </div>
@@ -87,22 +135,14 @@ function ProductIcon({ product }: { product: ProductKey }) {
 }
 
 function ProductCard({
-  product, quantity, setQuantity, noEmptyBottles, setNoEmptyBottles,
+  product, quantity, setQuantity, noEmptyBottles, setNoEmptyBottles, catalog,
 }: {
   product: ProductKey; quantity: number; setQuantity: (n: number) => void;
-  noEmptyBottles: boolean; setNoEmptyBottles: (v: boolean) => void;
+  noEmptyBottles: boolean; setNoEmptyBottles: (v: boolean) => void; catalog: CatalogItem;
 }) {
-  const descriptions: Record<ProductKey, string> = {
-    egg: "",
-    water: "20-litre water can",
-    milk: "Price and pack size to be confirmed",
-    curd: "Price and pack size to be confirmed",
-  };
-  const total = product === "egg"
-    ? PRICE.egg * quantity
-    : product === "water"
-      ? PRICE.water * quantity + (noEmptyBottles ? PRICE.bottle * quantity : 0)
-      : 0;
+  const unavailable = (product === "milk" || product === "curd") && !catalog.enabled;
+  const total = catalog.unitPricePaise * quantity +
+    (product === "water" && noEmptyBottles ? PRICE.bottle * quantity : 0);
   return (
     <article className="rounded-2xl border border-customer-line bg-white p-4 shadow-card">
       <div className="grid grid-cols-[112px_minmax(0,1fr)_66px] items-center gap-3">
@@ -110,22 +150,32 @@ function ProductCard({
           <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-brand-pale">
             <ProductIcon product={product} />
           </div>
-          <QuantityControl value={quantity} onChange={setQuantity} min={product === "egg" ? MIN_EGG_QUANTITY : 0} unit={product === "egg" ? "eggs" : product === "water" ? "cans" : "units"} />
+          <QuantityControl
+            value={quantity}
+            onChange={setQuantity}
+            min={product === "egg" ? MIN_EGG_QUANTITY : 0}
+            disabled={unavailable}
+            unit={product === "egg" ? "eggs" : product === "water" ? "cans" : "units"}
+          />
         </div>
         <div className="min-w-0">
           <h3 className="font-semibold text-customer-ink">{PRODUCT_NAMES[product]}</h3>
-          {descriptions[product] ? <p className="mt-1 text-xs text-customer-muted">{descriptions[product]}</p> : null}
+          {product === "water" ? <p className="mt-1 text-xs text-customer-muted">20-litre water can</p> : null}
+          {(product === "milk" || product === "curd") ? (
+            <p className="mt-1 text-xs text-customer-muted">{catalog.enabled ? catalog.packLabel : "Currently unavailable"}</p>
+          ) : null}
           {product === "egg" ? (
             <>
-              <p className="mt-1 text-sm font-semibold text-brand">₹7 per egg</p>
+              <p className="mt-1 text-sm font-semibold text-brand">{money(catalog.unitPricePaise)} per egg</p>
               <p className="mt-1 text-xs text-customer-muted">Minimum order: 10 eggs</p>
             </>
           ) : null}
-          {product === "water" ? <p className="mt-1 text-sm font-semibold text-brand">₹30 per can · ₹150 refundable bottle deposit</p> : null}
+          {product === "water" ? <p className="mt-1 text-sm font-semibold text-brand">{money(catalog.unitPricePaise)} per can · ₹150 refundable bottle deposit</p> : null}
+          {(product === "milk" || product === "curd") && catalog.enabled ? <p className="mt-1 text-sm font-semibold text-brand">{money(catalog.unitPricePaise)} per unit</p> : null}
         </div>
         <div className="pt-2 text-right">
           <p className="text-base font-semibold tabular-nums text-customer-ink">
-            {product === "milk" || product === "curd" ? (quantity > 0 ? "Quote" : "—") : quantity > 0 ? money(total) : "—"}
+            {unavailable ? "Unavailable" : quantity > 0 ? money(total) : "—"}
           </p>
           <p className="mt-1 text-[10px] leading-tight text-customer-muted">Line total</p>
         </div>
@@ -147,7 +197,7 @@ function ProductCard({
       ) : null}
       {product === "water" && quantity > 0 ? (
         <div className="mt-3 space-y-2 border-t border-customer-line pt-3 text-sm">
-          <PriceRow label="Water price" detail={money(PRICE.water) + " × " + quantity + " cans"} value={PRICE.water * quantity} />
+          <PriceRow label="Water price" detail={money(catalog.unitPricePaise) + " × " + quantity + " cans"} value={catalog.unitPricePaise * quantity} />
           <PriceRow label="Bottle price" detail={money(PRICE.bottle) + " × " + (noEmptyBottles ? quantity : 0) + " bottles"} value={PRICE.bottle * (noEmptyBottles ? quantity : 0)} />
           <p className="text-[11px] leading-relaxed text-customer-muted">Bottle deposit is charged only when you cannot return an empty bottle.</p>
         </div>
@@ -202,6 +252,8 @@ export function SpencersCustomerApp() {
   const [hydrated, setHydrated] = useState(false);
   const [sessionChecked, setSessionChecked] = useState(false);
   const [authBusy, setAuthBusy] = useState(false);
+  const [placingOrder, setPlacingOrder] = useState(false);
+  const [catalog, setCatalog] = useState<NativeCatalog>(DEFAULT_CATALOG);
   const [resendIn, setResendIn] = useState(0);
   const [tab, setTab] = useState<Tab>("home");
   const [phoneInput, setPhoneInput] = useState("");
@@ -299,8 +351,10 @@ export function SpencersCustomerApp() {
 
   const activeAddress = data.addresses.find((a) => a.id === data.activeAddressId) ?? data.addresses[0] ?? null;
   const waterDeposit = data.noEmptyBottles ? data.quantities.water * PRICE.bottle : 0;
-  const knownTotal = data.quantities.egg * PRICE.egg + data.quantities.water * PRICE.water + waterDeposit;
-  const hasUnpriced = data.quantities.milk > 0 || data.quantities.curd > 0;
+  const knownTotal = (Object.keys(data.quantities) as ProductKey[]).reduce(
+    (sum, key) => sum + data.quantities[key] * catalog[key].unitPricePaise, 0,
+  ) + waterDeposit;
+  const hasUnpriced = (data.quantities.milk > 0 && !catalog.milk.enabled) || (data.quantities.curd > 0 && !catalog.curd.enabled);
   const selectedCount = Object.values(data.quantities).reduce((sum, n) => sum + n, 0);
   const latestOrder = data.orders[0] ?? null;
   const refundTotal = useMemo(() => data.walletPaise, [data.walletPaise]);
@@ -547,10 +601,10 @@ export function SpencersCustomerApp() {
             <section>
               <div className="mb-3"><h2 className="text-xl font-bold">Products Available</h2><p className="mt-1 text-sm text-customer-muted">Choose what you need</p></div>
               <div className="space-y-3">
-                <ProductCard product="egg" quantity={data.quantities.egg} setQuantity={(n) => setQuantity("egg", n)} noEmptyBottles={data.noEmptyBottles} setNoEmptyBottles={(v) => setData((s) => ({ ...s, noEmptyBottles: v }))} />
-                <ProductCard product="water" quantity={data.quantities.water} setQuantity={(n) => setQuantity("water", n)} noEmptyBottles={data.noEmptyBottles} setNoEmptyBottles={(v) => setData((s) => ({ ...s, noEmptyBottles: v }))} />
-                <ProductCard product="milk" quantity={data.quantities.milk} setQuantity={(n) => setQuantity("milk", n)} noEmptyBottles={data.noEmptyBottles} setNoEmptyBottles={() => undefined} />
-                <ProductCard product="curd" quantity={data.quantities.curd} setQuantity={(n) => setQuantity("curd", n)} noEmptyBottles={data.noEmptyBottles} setNoEmptyBottles={() => undefined} />
+                <ProductCard product="egg" quantity={data.quantities.egg} setQuantity={(n) => setQuantity("egg", n)} noEmptyBottles={data.noEmptyBottles} setNoEmptyBottles={(v) => setData((s) => ({ ...s, noEmptyBottles: v }))} catalog={catalog.egg} />
+                <ProductCard product="water" quantity={data.quantities.water} setQuantity={(n) => setQuantity("water", n)} noEmptyBottles={data.noEmptyBottles} setNoEmptyBottles={(v) => setData((s) => ({ ...s, noEmptyBottles: v }))} catalog={catalog.water} />
+                <ProductCard product="milk" quantity={data.quantities.milk} setQuantity={(n) => setQuantity("milk", n)} noEmptyBottles={data.noEmptyBottles} setNoEmptyBottles={() => undefined} catalog={catalog.milk} />
+                <ProductCard product="curd" quantity={data.quantities.curd} setQuantity={(n) => setQuantity("curd", n)} noEmptyBottles={data.noEmptyBottles} setNoEmptyBottles={() => undefined} catalog={catalog.curd} />
               </div>
             </section>
             <button type="button" onClick={() => setPartnerOpen(true)} className="flex min-h-16 items-center gap-3 rounded-2xl border border-customer-line bg-white p-4 text-left">
