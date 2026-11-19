@@ -56,20 +56,41 @@ export async function verifyPhoneOtp(phoneInput: unknown, codeInput: unknown, na
 
 export type NativeCustomer = { id: string; name: string; phone: string };
 
+function customerCookieToken(request: Request): string | null {
+  const cookie = request.headers.get("cookie") ?? "";
+  for (const part of cookie.split(";")) {
+    const separator = part.indexOf("=");
+    if (separator < 0 || part.slice(0, separator).trim() !== "__Host-spencers-customer") continue;
+    const token = part.slice(separator + 1).trim();
+    return /^[A-Za-z0-9_-]{30,}$/.test(token) ? token : null;
+  }
+  return null;
+}
+
 export async function authenticateNativeRequest(request: Request): Promise<NativeCustomer | null> {
-  const match = /^Bearer\s+([A-Za-z0-9_-]{30,})$/i.exec(request.headers.get("authorization") ?? "");
-  if (!match) return null;
+  const bearer = /^Bearer\s+([A-Za-z0-9_-]{30,})$/i.exec(request.headers.get("authorization") ?? "");
+  const token = bearer?.[1] ?? customerCookieToken(request);
+  if (!token) return null;
+
+  // Browser-cookie authentication is accepted only from same-origin writes.
+  // Native apps continue to authenticate using their bearer session token.
+  if (!bearer && !["GET", "HEAD", "OPTIONS"].includes(request.method)) {
+    const origin = request.headers.get("origin");
+    if (!origin || origin !== new URL(request.url).origin) return null;
+  }
+
+  const digest = tokenDigest(token);
   const sql = await getSql();
   const rows = await sql.query<NativeCustomer>(
-    `select c.id, c.name, c.phone
+    \`select c.id, c.name, c.phone
        from native_customer_sessions s
        join native_customers c on c.id = s.customer_id
       where s.token_hash = $1 and s.revoked_at is null and s.expires_at > now()
-      limit 1`,
-    [tokenDigest(match[1])],
+      limit 1\`,
+    [digest],
   );
   if (!rows[0]) return null;
-  await sql.query("update native_customer_sessions set last_seen_at = now() where token_hash = $1", [tokenDigest(match[1])]);
+  await sql.query("update native_customer_sessions set last_seen_at = now() where token_hash = $1", [digest]);
   return rows[0];
 }
 
@@ -391,6 +412,12 @@ export async function listNativeOrders(request: Request) {
       deliveryOtp: decryptOtp(String(row.delivery_otp_encrypted)),
       addressLabel: String(row.address_label),
       deliveryAddress: [row.address_line, row.city, row.pincode].filter(Boolean).join(", "),
+      address: {
+        label: String(row.address_label),
+        line1: String(row.address_line),
+        city: String(row.city),
+        pincode: String(row.pincode),
+      },
       events: events.map((event) => ({
         status: event.to_status, note: event.note, at: new Date(String(event.created_at)).getTime(),
       })),
