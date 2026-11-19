@@ -38,7 +38,7 @@ export function Frame({ children }: { children: ReactNode }) {
     if (!ready) return;
     document.documentElement.lang = lang === "ta" ? "ta" : "en";
   }, [lang, ready]);
-  if (path === "/") return <>{children}</>;
+  if (path === "/" || path.startsWith("/superadmin")) return <>{children}</>;
   if (!ready) return <Splash />;
   return (
     <div className="min-h-screen bg-paper text-ink">
