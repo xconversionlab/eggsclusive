@@ -21,9 +21,9 @@ export function apiJson(body: unknown, status = 200, headers?: HeadersInit): Res
 
 export function normalizeIndianPhone(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
-  const digits = raw.replace(/\\D/g, "");
+  const digits = raw.replace(/\D/g, "");
   const national = digits.startsWith("91") && digits.length === 12 ? digits.slice(2) : digits;
-  return /^[6-9]\\d{9}$/.test(national) ? `+91${national}` : null;
+  return /^[6-9]\d{9}$/.test(national) ? `+91${national}` : null;
 }
 
 function tokenDigest(token: string): string {
