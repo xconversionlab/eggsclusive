@@ -1,8 +1,8 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type FormEvent, type ReactNode } from "react";
 import {
-  Activity, AlertCircle, ArrowDownRight, ArrowUpRight, Boxes, Check, ChevronDown,
-  CircleDollarSign, ClipboardList, Egg, KeyRound, LayoutDashboard, LockKeyhole,
-  LogOut, Package, RefreshCw, Search, ShieldCheck, Store, Ticket, Truck, Users,
+  Activity, AlertCircle, Boxes, Check, CircleDollarSign, ClipboardList, Egg, KeyRound,
+  LayoutDashboard, LockKeyhole, LogOut, Package, RefreshCw, Search, ShieldCheck,
+  Store, Ticket, Truck, Users,
 } from "lucide-react";
 
 type Stats = {
@@ -91,12 +91,12 @@ function Metric({ label, value, hint, icon: Icon }: {
   );
 }
 
-function Panel({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+function Panel({ children, className = "" }: { children: ReactNode; className?: string }) {
   return <section className={`rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-5 ${className}`}>{children}</section>;
 }
 
-function ActionButton({ children, onClick, disabled, tone = "dark" }: {
-  children: React.ReactNode; onClick: () => void; disabled?: boolean; tone?: "dark" | "blue" | "line" | "danger";
+function ActionButton({ children, onClick, disabled, tone = "dark", type = "button" }: {
+  children: ReactNode; onClick: () => void; disabled?: boolean; tone?: "dark" | "blue" | "line" | "danger"; type?: "button" | "submit";
 }) {
   const tones = {
     dark: "bg-slate-950 text-white hover:bg-slate-800",
@@ -104,7 +104,7 @@ function ActionButton({ children, onClick, disabled, tone = "dark" }: {
     line: "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
     danger: "bg-rose-600 text-white hover:bg-rose-500",
   };
-  return <button type="button" onClick={onClick} disabled={disabled} className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-xl px-3.5 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-45 ${tones[tone]}`}>{children}</button>;
+  return <button type={type} onClick={onClick} disabled={disabled} className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-xl px-3.5 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-45 ${tones[tone]}`}>{children}</button>;
 }
 
 export function SuperAdminApp() {
@@ -121,7 +121,7 @@ export function SuperAdminApp() {
   const [orders, setOrders] = useState<SuperOrder[]>([]);
   const [complaints, setComplaints] = useState<Complaint[]>([]);
   const [inventory, setInventory] = useState<InventoryRow[]>([]);
-  const [catalog, setCatalog] = useState<CatalogProduct[]>([]);
+
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [assignment, setAssignment] = useState<Record<string, string>>({});
@@ -150,7 +150,7 @@ export function SuperAdminApp() {
       setOrders(orderData.orders);
       setComplaints(supportData.complaints);
       setInventory(inventoryData.inventory);
-      setCatalog(catalogData.catalog);
+
       setAssignment(Object.fromEntries(orderData.orders.map((order) => [order.id, order.vendorId ?? ""])));
       setTicketStatus(Object.fromEntries(supportData.complaints.map((ticket) => [ticket.id, ticket.status])));
       setInventoryDraft(Object.fromEntries(inventoryData.inventory.map((item) => [
@@ -182,7 +182,7 @@ export function SuperAdminApp() {
     }
   }
 
-  async function connect(event: React.FormEvent) {
+  async function connect(event: FormEvent) {
     event.preventDefault();
     const key = secretInput.trim();
     if (!key) { setError("Enter the Super Admin access key."); return; }
@@ -218,7 +218,7 @@ export function SuperAdminApp() {
     }, `${vendor.name} is now ${status}.`);
   }
 
-  async function createVendor(event: React.FormEvent) {
+  async function createVendor(event: FormEvent) {
     event.preventDefault();
     const pins = [...new Set(vendorForm.pincodes.split(/[\s,;]+/).map((v) => v.trim()).filter(Boolean))];
     await mutate("new-vendor", "/vendors", { name: vendorForm.name, phone: vendorForm.phone, servicePincodes: pins }, (result) => {
@@ -257,14 +257,14 @@ export function SuperAdminApp() {
     }, `${item.vendorName} · ${item.productKey} stock saved.`);
   }
 
-  async function saveCatalog(event: React.FormEvent) {
+  async function saveCatalog(event: FormEvent) {
     event.preventDefault();
     const payload = Object.fromEntries((["milk", "curd"] as const).map((key) => {
       const price = Number(catalogDraft[key].price || 0);
       return [key, { unitPricePaise: Math.round(price * 100), packLabel: catalogDraft[key].packLabel.trim(), enabled: catalogDraft[key].enabled }];
     }));
     await mutate("catalog", "/catalog", payload, (result) => {
-      setCatalog(result.catalog);
+
     }, "Customer catalogue updated.");
   }
 
@@ -449,7 +449,7 @@ export function SuperAdminApp() {
                 <input required value={vendorForm.name} onChange={(e) => setVendorForm((v) => ({ ...v, name: e.target.value }))} placeholder="Shop name" className="min-h-11 rounded-xl border border-slate-200 px-3 text-sm" />
                 <input required inputMode="tel" value={vendorForm.phone} onChange={(e) => setVendorForm((v) => ({ ...v, phone: e.target.value }))} placeholder="10-digit mobile" className="min-h-11 rounded-xl border border-slate-200 px-3 text-sm" />
                 <input required value={vendorForm.pincodes} onChange={(e) => setVendorForm((v) => ({ ...v, pincodes: e.target.value }))} placeholder="6-digit pincodes, comma separated" className="min-h-11 rounded-xl border border-slate-200 px-3 text-sm" />
-                <ActionButton tone="blue" onClick={() => undefined} disabled={busyId === "new-vendor"}>{busyId === "new-vendor" ? "Saving…" : "Create vendor"}</ActionButton>
+                <ActionButton type="submit" tone="blue" onClick={() => undefined} disabled={busyId === "new-vendor"}>{busyId === "new-vendor" ? "Saving…" : "Create vendor"}</ActionButton>
               </form>
               <p className="mt-2 text-[10px] text-slate-500">New vendors are created as Pending and cannot accept customer orders until approved.</p>
             </Panel>
@@ -521,7 +521,7 @@ export function SuperAdminApp() {
                     <label className="flex min-h-11 items-center gap-2 text-xs font-semibold"><input type="checkbox" checked={catalogDraft[key].enabled} onChange={(e) => setCatalogDraft((all) => ({ ...all, [key]: { ...all[key], enabled: e.target.checked } }))} /> Enabled</label>
                   </div>
                 ))}
-                <div className="flex justify-end"><ActionButton tone="blue" onClick={() => undefined} disabled={busyId === "catalog"}>{busyId === "catalog" ? "Saving…" : "Save catalogue"}</ActionButton></div>
+                <div className="flex justify-end"><ActionButton type="submit" tone="blue" onClick={() => undefined} disabled={busyId === "catalog"}>{busyId === "catalog" ? "Saving…" : "Save catalogue"}</ActionButton></div>
               </form>
             </Panel>
           </>
