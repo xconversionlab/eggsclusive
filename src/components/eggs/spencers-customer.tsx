@@ -388,7 +388,7 @@ export function SpencersCustomerApp() {
     let active = true;
     const restoreSession = async () => {
       try {
-        const response = await fetch("/api/customer-auth", {
+        const response = await fetch("/api/customer-auth/session", {
           credentials: "same-origin",
           cache: "no-store",
         });
@@ -467,7 +467,7 @@ export function SpencersCustomerApp() {
     setLoginError("");
     setAuthBusy(true);
     try {
-      const response = await fetch("/api/customer-auth", {
+      const response = await fetch("/api/customer-auth/request-otp", {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
@@ -491,7 +491,7 @@ export function SpencersCustomerApp() {
     setLoginError("");
     setAuthBusy(true);
     try {
-      const response = await fetch("/api/customer-auth", {
+      const response = await fetch("/api/customer-auth/verify-otp", {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
@@ -527,7 +527,7 @@ export function SpencersCustomerApp() {
   const logout = async () => {
     setAuthBusy(true);
     try {
-      await fetch("/api/customer-auth", {
+      await fetch("/api/customer-auth/logout", {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
